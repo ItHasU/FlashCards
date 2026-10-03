@@ -273,3 +273,15 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
 .reading-answers li.wrong .mark { color: var(--muted); }
 .reading-answers .answer-text > p { margin: 0; }
 .reading-tf .correct { color: var(--ok); }
+
+.history-list { list-style: none; padding: 0; margin: 0 0 0.6rem; display: grid; gap: 0.5rem; }
+.history-entry { display: flex; gap: 0.4rem; align-items: stretch; }
+.history-open {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; text-align: left;
+  font: inherit; color: var(--text); background: var(--surface); padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border); border-radius: 10px; cursor: pointer; overflow-wrap: anywhere;
+}
+.history-open:hover:not(:disabled) { border-color: var(--primary); background: var(--primary-soft); }
+.history-open:disabled { cursor: not-allowed; opacity: 0.75; }
+.history-remove { font-size: 1.2rem; line-height: 1; }
+.warning-text { color: var(--warn); }

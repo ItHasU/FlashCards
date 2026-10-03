@@ -29,6 +29,11 @@ Pour charger des quiz :
 
 Les fichiers restent dans le navigateur : rien n'est envoyé à un serveur.
 
+La page d'accueil garde un **historique** des quiz chargés (dans le
+`localStorage` du navigateur) pour les rouvrir en un clic. Les quiz chargés
+par URL sont rechargés depuis leur URL ; les fichiers déposés sont conservés
+avec leur contenu, sauf au-delà de 1,5 Mo, où il faut les déposer à nouveau.
+
 Trois modes, au choix avant de commencer (les filtres par quiz, niveau, type
 et thème s'appliquent à tous) :
 
