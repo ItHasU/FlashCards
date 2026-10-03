@@ -150,12 +150,6 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
   cursor: pointer; user-select: none;
 }
 .chip input:checked + span { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
-.count { display: flex; gap: 1rem; align-items: center; }
-.count input[type='range'] { flex: 1; accent-color: var(--primary); }
-.count-input {
-  width: 5rem; font: inherit; padding: 0.4rem; border-radius: 8px; border: 1px solid var(--border);
-  background: var(--surface); color: var(--text);
-}
 .available { font-weight: 600; }
 .available.warning { color: var(--ko); }
 
@@ -243,7 +237,6 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
 .source-excerpt blockquote { margin: 0 0 0.4rem; font-style: italic; color: var(--text); }
 .source-excerpt blockquote + p { color: var(--muted); font-size: 0.9rem; }
 
-.running-score { font-weight: 700; color: var(--primary); }
 .verdict .points { font-size: 0.95rem; font-weight: 700; opacity: 0.85; margin-left: 0.3rem; }
 .hint-box { margin-top: 1.2rem; padding: 1rem; border-radius: 10px; border-left: 4px solid var(--primary); background: var(--primary-soft); }
 .hint-box .sources h3 { margin-top: 0.4rem; }
@@ -261,3 +254,22 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
 .mistake.outcome-wrong summary .points, .mistake.outcome-wrongWithHint summary .points { color: var(--ko); }
 .mistake.outcome-unanswered summary .points { color: var(--muted); }
 .mistake dd.correct:first-of-type { color: var(--ok); }
+
+.modes { display: grid; gap: 0.5rem; }
+.mode-choice { display: flex; gap: 0.7rem; align-items: flex-start; padding: 0.7rem 0.8rem; border: 2px solid var(--border); border-radius: 10px; cursor: pointer; }
+.mode-choice:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+.mode-choice input { margin-top: 0.3rem; accent-color: var(--primary); }
+.mode-choice > span { display: flex; flex-direction: column; }
+.feedback.skipped { background: var(--primary-soft); border-color: var(--primary); }
+.feedback.skipped .verdict { color: var(--primary); }
+.badge.comeback { background: color-mix(in srgb, var(--l2) 16%, transparent); color: var(--l2); }
+.reading-top { margin-top: 0; }
+.reading-top h1 { margin: 0.5rem 0; }
+.reading-answers { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+.reading-answers li { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.5rem 0.7rem; border-radius: 8px; border: 1px solid var(--border); }
+.reading-answers li.correct { border-color: var(--ok); background: var(--ok-soft); }
+.reading-answers li .mark { font-weight: 800; width: 1.2rem; flex: none; }
+.reading-answers li.correct .mark { color: var(--ok); }
+.reading-answers li.wrong .mark { color: var(--muted); }
+.reading-answers .answer-text > p { margin: 0; }
+.reading-tf .correct { color: var(--ok); }

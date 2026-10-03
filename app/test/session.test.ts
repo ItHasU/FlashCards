@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseQuiz } from '../../format/src';
 import { Library } from '../src/library';
-import { candidates, isCorrect, newSession, POINTS, score, shuffle } from '../src/session';
+import { candidates, isCorrect, newSession, POINTS, QUIZ_SIZE, scheduleComeback, score, shuffle, trainingProgress } from '../src/session';
 
 const quiz = (lang: string, mcq: string, tf = 'true') =>
   parseQuiz(
@@ -49,21 +49,49 @@ describe('session', () => {
     expect(lib.languages().sort()).toEqual(['en', 'fr']);
   });
 
-  it('draws the requested number of questions', () => {
+  it('a quiz draws QUIZ_SIZE random questions, training takes them all', () => {
+    const many = parseQuiz(
+      `---\nformat: 1\nid: many\ntitle: Many\nlanguage: en\n---\n` +
+        Array.from({ length: 15 }, (_, k) => `## Q${k}\n<!-- id: m${k} | level: 1 | type: true-false | answer: true -->\n> [!source] link\n> https://x.y\n`).join('\n'),
+    ).quiz!;
+    const lib = new Library();
+    lib.add(many, noMedia);
+    const filters = { quizIds: ['many'], levels: [1, 2, 3] as (1 | 2 | 3)[], types: ['mcq', 'true-false'] as ('mcq' | 'true-false')[], tags: [] };
+    expect(QUIZ_SIZE).toBe(10);
+    expect(newSession(lib, { ...filters, mode: 'quiz' }).items).toHaveLength(10);
+    expect(new Set(newSession(lib, { ...filters, mode: 'training' }).items.map((i) => i.questionId)).size).toBe(15);
+  });
+
+  it('training: missed or skipped questions come back 2 to 4 questions later, until mastered', () => {
     const lib = new Library();
     lib.add(quiz('en', '- [x] a\n- [ ] b\n- [ ] c'), noMedia);
-    const s = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 1, feedback: 'end' });
-    expect(s.items).toHaveLength(1);
-    const all = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10, feedback: 'end' });
-    const mcq = all.items.find((i) => i.questionId === 'q1')!;
-    expect([...mcq.order].sort()).toEqual([0, 1, 2]);
+    const s = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], mode: 'training' });
+    expect(s.items).toHaveLength(2);
+    s.items[0].result = 'wrong';
+    scheduleComeback(lib, s, () => 0.99);
+    // Only one other question left: the comeback goes after it.
+    expect(s.items.map((i) => i.attempt)).toEqual([1, 1, 2]);
+    expect(s.items[2].questionId).toBe(s.items[0].questionId);
+    expect(s.items[2].selected).toEqual([]);
+    expect(trainingProgress(s)).toEqual({ total: 2, mastered: 0, firstTry: 0, retried: 1 });
+
+    s.index = 1;
+    s.items[1].result = 'correct';
+    scheduleComeback(lib, s); // correct: nothing scheduled
+    expect(s.items).toHaveLength(3);
+    s.index = 2;
+    s.items[2].skipped = true;
+    scheduleComeback(lib, s); // skipped: comes back right away, nothing else is left
+    expect(s.items.map((i) => i.attempt)).toEqual([1, 1, 2, 3]);
+    s.items[3].result = 'correct';
+    expect(trainingProgress(s)).toEqual({ total: 2, mastered: 2, firstTry: 1, retried: 1 });
   });
 
   it('scores points: +2 / +1 with hint when correct, 0 / -1 with hint when wrong, 0 unanswered', () => {
     expect(POINTS).toEqual({ correct: 2, correctWithHint: 1, wrong: 0, wrongWithHint: -1, unanswered: 0 });
     const lib = new Library();
     lib.add(quiz('en', '- [x] a\n- [ ] b'), noMedia);
-    const session = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10, feedback: 'end' });
+    const session = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], mode: 'quiz' });
     const [first, second] = session.items;
     first.result = 'correct';
     second.result = 'wrong';

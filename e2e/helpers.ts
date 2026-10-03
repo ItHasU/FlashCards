@@ -80,13 +80,8 @@ export function exampleFiles(title: string) {
     .map((f) => ({ name: f, mimeType: 'text/markdown', buffer: readFileSync(join(EXAMPLES, dir, f)) }));
 }
 
-export async function setFeedback(page: Page, mode: 'end' | 'immediate'): Promise<void> {
-  await page.locator('.chip', { hasText: mode === 'end' ? 'At the end of the quiz' : 'After each question' }).click();
-}
-
-export async function setCount(page: Page, n: number): Promise<void> {
-  await page.locator('.count-input').fill(String(n));
-  await page.locator('.count-input').dispatchEvent('change');
+export async function setMode(page: Page, mode: 'quiz' | 'training' | 'read'): Promise<void> {
+  await page.locator('.mode-choice', { hasText: { quiz: 'Quiz', training: 'Training', read: 'Reading' }[mode] }).click();
 }
 
 /** Builds an in-memory .zip of an example folder, as the package script would. */

@@ -10,8 +10,7 @@ Le projet a deux parties :
   FlashCards (Markdown, un fichier par langue, `.zip` s'il y a des images).
 - **`app/`** : une application web statique pour réviser. Elle tire des
   questions au hasard, mélange les réponses, filtre par niveau, type et thème,
-  et affiche la correction avec sa source, à la fin du quiz ou après chaque
-  question. L'interface et les quiz sont multilingues, et on peut changer de
+  et propose trois modes : quiz noté, entraînement et lecture. L'interface et les quiz sont multilingues, et on peut changer de
   langue même au milieu d'une question.
 
 Le format est décrit dans [`docs/format.md`](docs/format.md), et la feuille de
@@ -30,22 +29,26 @@ Pour charger des quiz :
 
 Les fichiers restent dans le navigateur : rien n'est envoyé à un serveur.
 
-Avant de commencer, on choisit quand afficher les réponses :
+Trois modes, au choix avant de commencer (les filtres par quiz, niveau, type
+et thème s'appliquent à tous) :
 
-- **à la fin du quiz** (par défaut) : la correction complète, question par
-  question, s'affiche sur l'écran des résultats ;
-- **après chaque question** : la correction, l'explication et les sources
-  s'affichent dès qu'on valide.
+- **Quiz** (par défaut) : 10 questions tirées au hasard, notées, corrigées à la
+  fin. On ne peut pas passer une question, mais le bouton « Indice : voir la
+  source » affiche la source de la question (sans la réponse ni
+  l'explication). Barème :
 
-Si l'on bloque, le bouton « Indice : voir la source » affiche la source de la
-question (sans la réponse ni l'explication), puis on répond. Barème :
+  | | Sans indice | Avec indice |
+  |---|---|---|
+  | Bonne réponse | **+2** | **+1** |
+  | Mauvaise réponse | **0** | **−1** |
 
-| | Sans indice | Avec indice |
-|---|---|---|
-| Bonne réponse | **+2** | **+1** |
-| Mauvaise réponse | **0** | **−1** |
-
-Une question laissée sans réponse (session terminée en avance) vaut 0.
+  Une question laissée sans réponse (quiz terminé en avance) vaut 0.
+- **Entraînement** : une question à la fois, corrigée tout de suite, sans
+  points. Une question ratée, ou passée (« Passer et voir la réponse »),
+  revient quelques questions plus tard. L'entraînement se termine quand toutes
+  les questions ont été réussies, ou quand on clique sur « Arrêter ».
+- **Lecture** : toutes les questions avec leur réponse, leur explication et
+  leurs sources, dans l'ordre du fichier.
 
 ## Exemples
 

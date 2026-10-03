@@ -9,18 +9,24 @@ import {
   candidates,
   expectedAnswers,
   isCorrect,
+  MODES,
   newSession,
   outcome,
   POINTS,
+  QUIZ_SIZE,
   retrySession,
+  scheduleComeback,
   score,
-  type Outcome,
+  trainingProgress,
+  type Candidate,
   type Config,
   type Item,
+  type Mode,
+  type Outcome,
   type Session,
 } from './session';
 
-type Screen = 'home' | 'config' | 'question' | 'results';
+type Screen = 'home' | 'config' | 'reading' | 'question' | 'results';
 
 const state = {
   screen: 'home' as Screen,
@@ -41,6 +47,7 @@ function render(): void {
   const view = {
     home: homeView,
     config: configView,
+    reading: readingView,
     question: questionView,
     results: resultsView,
   }[state.screen]();
@@ -199,7 +206,7 @@ function allTags(quizIds: string[]): string[] {
 function syncConfig(): void {
   const ids = [...state.library.bundles.keys()];
   if (!state.config) {
-    state.config = { quizIds: ids, levels: [...LEVELS], types: [...QUESTION_TYPES], tags: [], count: 10, feedback: 'end' };
+    state.config = { quizIds: ids, levels: [...LEVELS], types: [...QUESTION_TYPES], tags: [], mode: 'quiz' };
     return;
   }
   const known = new Set(state.config.quizIds);
@@ -211,30 +218,21 @@ function configView(): HTMLElement[] {
   const lang = getLanguage();
 
   const availableEl = h('p', { class: 'available' });
-  const countInput = h('input', { type: 'number', min: 1, value: config.count, class: 'count-input', 'aria-label': t('config.count') });
-  const countRange = h('input', { type: 'range', min: 1, value: config.count, 'aria-label': t('config.count') });
   const startBtn = h('button', { class: 'button primary big', onclick: start }, t('config.start'));
 
   function update(): void {
     const n = candidates(state.library, config).length;
     availableEl.textContent = n ? t('config.available', { n }) : t('config.none');
     availableEl.classList.toggle('warning', n === 0);
-    const max = Math.max(1, n);
-    countRange.max = countInput.max = String(max);
-    const shown = Math.min(config.count, max);
-    countRange.value = countInput.value = String(shown);
     startBtn.disabled = n === 0;
   }
-  function setCount(value: number): void {
-    if (Number.isFinite(value) && value >= 1) config.count = Math.round(value);
-    update();
-  }
-  countInput.addEventListener('change', () => setCount(Number(countInput.value)));
-  countRange.addEventListener('input', () => setCount(Number(countRange.value)));
 
   function start(): void {
-    const n = candidates(state.library, config).length;
-    state.session = newSession(state.library, { ...config, count: Math.min(config.count, n) });
+    if (config.mode === 'read') {
+      go('reading');
+      return;
+    }
+    state.session = newSession(state.library, { ...config });
     go('question');
   }
 
@@ -333,34 +331,36 @@ function configView(): HTMLElement[] {
     h(
       'section',
       { class: 'card' },
-      chips(t('config.levels'), LEVELS, () => config.levels, (l) => `${l} · ${t(`level.${l}` as MessageKey)}`, (v) => (config.levels = v as Level[])),
-      chips(t('config.types'), QUESTION_TYPES, () => config.types, (ty) => t(`type.${ty}` as MessageKey), (v) => (config.types = v as QuestionType[])),
-      tags.length ? chips(t('config.tags'), tags, () => config.tags, (tag) => tag, (v) => (config.tags = v), t('config.tagsHint')) : null,
-      h('fieldset', {}, h('legend', {}, t('config.count')), h('div', { class: 'count' }, countRange, countInput)),
       h(
         'fieldset',
         {},
-        h('legend', {}, t('config.feedback')),
+        h('legend', {}, t('config.mode')),
         h(
           'div',
-          { class: 'chips', role: 'radiogroup' },
-          (['end', 'immediate'] as const).map((mode) =>
+          { class: 'modes', role: 'radiogroup' },
+          MODES.map((mode) =>
             h(
               'label',
-              { class: 'chip' },
+              { class: 'mode-choice' },
               h('input', {
                 type: 'radio',
-                name: 'feedback',
+                name: 'mode',
                 value: mode,
-                checked: config.feedback === mode,
-                onchange: () => (config.feedback = mode),
+                checked: config.mode === mode,
+                onchange: () => {
+                  config.mode = mode;
+                  render();
+                },
               }),
-              h('span', {}, t(`feedback.${mode}` as MessageKey)),
+              h('span', {}, h('strong', {}, t(`mode.${mode}` as MessageKey)), h('span', { class: 'muted small' }, t(`mode.${mode}.help` as MessageKey, { n: QUIZ_SIZE }))),
             ),
           ),
         ),
-        h('p', { class: 'muted small' }, t('config.scoring')),
+        config.mode === 'quiz' ? h('p', { class: 'muted small' }, t('config.scoring')) : null,
       ),
+      chips(t('config.levels'), LEVELS, () => config.levels, (l) => `${l} · ${t(`level.${l}` as MessageKey)}`, (v) => (config.levels = v as Level[])),
+      chips(t('config.types'), QUESTION_TYPES, () => config.types, (ty) => t(`type.${ty}` as MessageKey), (v) => (config.types = v as QuestionType[])),
+      tags.length ? chips(t('config.tags'), tags, () => config.tags, (tag) => tag, (v) => (config.tags = v), t('config.tagsHint')) : null,
       availableEl,
       startBtn,
     ),
@@ -408,7 +408,7 @@ function answerLabels(question: Question, resolve: MediaResolver, order: number[
 
 function select(index: number): void {
   const item = currentItem();
-  if (item.result) return;
+  if (item.result || item.skipped) return;
   const resolved = resolveItem(item);
   if (!resolved) return;
   const multi = resolved.question.type === 'mcq' && resolved.question.answers.filter((a) => a.correct).length > 1;
@@ -417,13 +417,17 @@ function select(index: number): void {
   render();
 }
 
-/** Records the answer. In "end" mode the correction stays hidden and the session moves on. */
+function mode(): Mode {
+  return state.session!.config.mode;
+}
+
+/** Records the answer. In a quiz the correction stays hidden until the end and the session moves on. */
 function submit(): void {
   const item = currentItem();
   const resolved = resolveItem(item);
-  if (!resolved || item.result || !item.selected.length) return;
+  if (!resolved || item.result || item.skipped || !item.selected.length) return;
   item.result = isCorrect(resolved.question, item.selected) ? 'correct' : 'wrong';
-  if (state.session!.config.feedback === 'end') {
+  if (mode() === 'quiz') {
     next();
     return;
   }
@@ -431,7 +435,7 @@ function submit(): void {
   document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/** Shows the sources of the question as a hint. The user still has to answer, for fewer points. */
+/** Quiz: shows the sources of the question as a hint. The user still has to answer, for fewer points. */
 function showHint(): void {
   const item = currentItem();
   if (item.result || item.hinted) return;
@@ -440,13 +444,23 @@ function showHint(): void {
   document.querySelector('.hint-box')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/** Whether the correction of the current question is on screen. */
+/** Training: skips the question and shows its answer; it will come back later. */
+function skip(): void {
+  const item = currentItem();
+  if (item.result || item.skipped) return;
+  item.skipped = true;
+  render();
+  document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** Whether the correction of the current question is on screen (training only). */
 function correctionShown(item: Item): boolean {
-  return item.result !== undefined && state.session!.config.feedback === 'immediate';
+  return mode() === 'training' && (item.result !== undefined || item.skipped === true);
 }
 
 function next(): void {
   const session = state.session!;
+  if (mode() === 'training') scheduleComeback(state.library, session);
   if (session.index < session.items.length - 1) {
     session.index++;
     go('question');
@@ -461,16 +475,16 @@ function signed(points: number): string {
   return points > 0 ? `+${points}` : points < 0 ? `−${-points}` : '0';
 }
 
-function outcomeView(item: Item): HTMLElement {
+/** Verdict of a question: with points in a quiz, without in training. */
+function outcomeView(item: Item, withPoints: boolean): HTMLElement {
   const o = outcome(item);
-  const label = o === 'unanswered' ? t('outcome.unanswered') : t(item.result === 'correct' ? 'q.correct' : 'q.wrong');
+  const label = item.skipped ? t('q.skipped') : o === 'unanswered' ? t('outcome.unanswered') : t(item.result === 'correct' ? 'q.correct' : 'q.wrong');
   return h(
     'p',
     { class: 'verdict' },
     label,
     item.hinted ? ` ${t('q.withHint')}` : '',
-    ' ',
-    h('span', { class: 'points' }, t('q.points', { p: signed(POINTS[o]) })),
+    withPoints ? [' ', h('span', { class: 'points' }, t('q.points', { p: signed(POINTS[o]) }))] : null,
   );
 }
 
@@ -479,6 +493,23 @@ function correctionView(question: Question, resolve: MediaResolver): HTMLElement
     question.explanation ? h('div', { class: 'explanation' }, h('h3', {}, t('q.explanation')), rich('div', renderBlock(question.explanation, resolve))) : null,
     sourcesView(question.sources, resolve),
   ].filter(Boolean) as HTMLElement[];
+}
+
+function metaView(question: Question, quizId: string, showQuiz: boolean): HTMLElement {
+  return h(
+    'div',
+    { class: 'meta' },
+    h('span', { class: `badge level level-${question.level}` }, `${question.level} · ${t(`level.${question.level}` as MessageKey)}`),
+    showQuiz ? h('span', { class: 'badge' }, state.library.meta(quizId, getLanguage()).title) : null,
+    ...question.tags.map((tag) => h('span', { class: 'tag' }, `#${tag}`)),
+  );
+}
+
+function fallbackView(lang: string): HTMLElement | null {
+  const ui = getLanguage();
+  return lang !== ui && lang.split('-')[0] !== ui.split('-')[0]
+    ? h('p', { class: 'fallback muted small' }, t('q.fallback', { lang: languageName(ui, ui), other: languageName(lang, ui) }))
+    : null;
 }
 
 function questionView(): HTMLElement[] {
@@ -491,26 +522,26 @@ function questionView(): HTMLElement[] {
   }
   const { question, translation, lang } = resolved;
   const resolve = translation.resolve;
+  const training = session.config.mode === 'training';
   const shown = correctionShown(item);
+  const done = item.result !== undefined || item.skipped === true;
   const expected = expectedAnswers(question);
   const multi = question.type === 'mcq' && expected.length > 1;
   const quizCount = new Set(session.items.map((i) => i.quizId)).size;
-  const ui = getLanguage();
-  const immediate = session.config.feedback === 'immediate';
 
   const answers = answerLabels(question, resolve, item.order).map(({ index, html }, k) => {
     const selected = item.selected.includes(index);
     const classes = ['answer'];
     if (selected) classes.push('selected');
-    if (shown && expected.includes(index)) classes.push(selected ? 'correct' : 'missed');
-    if (shown && selected && !expected.includes(index)) classes.push('wrong');
+    if (shown && expected.includes(index)) classes.push(selected && !item.skipped ? 'correct' : 'missed');
+    if (shown && selected && !item.skipped && !expected.includes(index)) classes.push('wrong');
     return h(
       'button',
       {
         class: classes.join(' '),
         role: multi ? 'checkbox' : 'radio',
         'aria-checked': String(selected),
-        disabled: item.result !== undefined,
+        disabled: done,
         onclick: () => select(index),
       },
       h('span', { class: 'key', 'aria-hidden': 'true' }, String(k + 1)),
@@ -518,9 +549,32 @@ function questionView(): HTMLElement[] {
     );
   });
 
-  const progress = ((session.index + (item.result ? 1 : 0)) / session.items.length) * 100;
-  const isLast = session.index === session.items.length - 1;
+  // Training ends when the last scheduled question is answered correctly (a miss schedules a comeback).
+  const isLast = session.index === session.items.length - 1 && (!training || item.result === 'correct');
   const nextLabel = t(isLast ? 'q.finish' : 'q.next');
+  let progressLabel: string;
+  let progress: number;
+  if (training) {
+    const p = trainingProgress(session);
+    progressLabel = t('q.mastered', { m: p.mastered, n: p.total });
+    progress = (p.mastered / p.total) * 100;
+  } else {
+    progressLabel = t('q.progress', { i: session.index + 1, n: session.items.length });
+    progress = ((session.index + (done ? 1 : 0)) / session.items.length) * 100;
+  }
+
+  let actions: (HTMLElement | null)[];
+  if (shown) actions = [h('button', { class: 'button primary', onclick: next, autofocus: true }, nextLabel)];
+  else if (training)
+    actions = [
+      h('button', { class: 'button primary', onclick: submit, disabled: item.selected.length === 0 }, t('q.validate')),
+      h('button', { class: 'button ghost skip-button', onclick: skip }, t('q.skip')),
+    ];
+  else
+    actions = [
+      h('button', { class: 'button primary', onclick: submit, disabled: item.selected.length === 0 }, nextLabel),
+      item.hinted ? null : h('button', { class: 'button ghost hint-button', onclick: showHint }, t('q.hint')),
+    ];
 
   return [
     h(
@@ -530,50 +584,32 @@ function questionView(): HTMLElement[] {
       h(
         'div',
         { class: 'row spread' },
-        h('span', { class: 'muted' }, t('q.progress', { i: session.index + 1, n: session.items.length })),
-        immediate ? h('span', { class: 'running-score' }, t('q.score', { p: score(state.library, session).points })) : null,
-        h('button', { class: 'button ghost small', onclick: () => go('results') }, t('q.quit')),
+        h('span', { class: 'muted progress-label' }, progressLabel),
+        training && item.attempt > 1 ? h('span', { class: 'badge comeback' }, t('q.comeback')) : null,
+        h('button', { class: 'button ghost small', onclick: () => go('results') }, t(training ? 'q.stop' : 'q.quit')),
       ),
     ),
     h(
       'article',
       { class: 'card question' },
-      h(
-        'div',
-        { class: 'meta' },
-        h('span', { class: `badge level level-${question.level}` }, `${question.level} · ${t(`level.${question.level}` as MessageKey)}`),
-        quizCount > 1 ? h('span', { class: 'badge' }, state.library.meta(item.quizId, ui).title) : null,
-        ...question.tags.map((tag) => h('span', { class: 'tag' }, `#${tag}`)),
-      ),
-      lang !== ui && lang.split('-')[0] !== ui.split('-')[0]
-        ? h('p', { class: 'fallback muted small' }, t('q.fallback', { lang: languageName(ui, ui), other: languageName(lang, ui) }))
-        : null,
+      metaView(question, item.quizId, quizCount > 1),
+      fallbackView(lang),
       rich('h2', renderInline(question.title, resolve), { class: 'question-title', lang }),
       question.body ? rich('div', renderBlock(question.body, resolve), { class: 'question-body', lang }) : null,
       h('p', { class: 'hint muted small' }, t(question.type === 'true-false' ? 'q.tf' : multi ? 'q.multi' : 'q.single')),
       h('div', { class: `answers ${question.type === 'true-false' ? 'tf' : ''}`, role: multi ? 'group' : 'radiogroup', lang }, answers),
-      item.hinted && !shown
+      item.hinted && !done
         ? h('div', { class: 'hint-box', lang }, h('p', { class: 'hint-used small' }, t('q.hintUsed')), sourcesView(question.sources, resolve, t('q.hintTitle')))
         : null,
-      shown ? h('div', { class: `feedback ${item.result}`, lang }, outcomeView(item), correctionView(question, resolve)) : null,
-      h(
-        'div',
-        { class: 'row actions' },
-        shown
-          ? h('button', { class: 'button primary', onclick: next, autofocus: true }, nextLabel)
-          : [
-              h('button', { class: 'button primary', onclick: submit, disabled: item.selected.length === 0 }, immediate ? t('q.validate') : nextLabel),
-              item.hinted ? null : h('button', { class: 'button ghost hint-button', onclick: showHint }, t('q.hint')),
-            ],
-        h('span', { class: 'muted small keys' }, t('q.keys')),
-      ),
+      shown ? h('div', { class: `feedback ${item.skipped ? 'skipped' : item.result}`, lang }, outcomeView(item, false), correctionView(question, resolve)) : null,
+      h('div', { class: 'row actions' }, actions, h('span', { class: 'muted small keys' }, t('q.keys'))),
     ),
   ];
 }
 
 document.addEventListener('keydown', (e) => {
   if (state.screen !== 'question' || e.ctrlKey || e.metaKey || e.altKey) return;
-  if ((e.target as HTMLElement).closest('input, select, textarea, button.hint-button')) return;
+  if ((e.target as HTMLElement).closest('input, select, textarea, button.hint-button, button.skip-button')) return;
   const item = currentItem();
   const resolved = resolveItem(item);
   if (!resolved) return;
@@ -591,6 +627,45 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Reading
+
+function readingAnswers(question: Question, resolve: MediaResolver): HTMLElement {
+  if (question.type === 'true-false')
+    return h('p', { class: 'reading-tf' }, h('span', { class: 'muted' }, `${t('results.expected')} : `), h('strong', { class: 'correct' }, t(question.answer ? 'tf.true' : 'tf.false')));
+  return h(
+    'ul',
+    { class: 'reading-answers' },
+    question.answers.map((a) =>
+      h('li', { class: a.correct ? 'correct' : 'wrong' }, h('span', { class: 'mark', 'aria-label': t(a.correct ? 'read.correct' : 'read.wrong') }, a.correct ? '✓' : '✗'), rich('span', renderBlock(a.text, resolve), { class: 'answer-text' })),
+    ),
+  );
+}
+
+function readingView(): HTMLElement[] {
+  const config = state.config!;
+  const list: Candidate[] = candidates(state.library, config);
+  const quizCount = new Set(list.map((c) => c.quizId)).size;
+  return [
+    h('div', { class: 'row spread reading-top' }, h('h1', {}, t('read.title', { n: list.length })), h('button', { class: 'button ghost', onclick: () => go('config') }, t('results.settings'))),
+    ...list.map((c) => {
+      const r = state.library.question(c.quizId, c.question.id, getLanguage());
+      if (!r) return h('span');
+      const { question, translation, lang } = r;
+      return h(
+        'article',
+        { class: 'card question reading', lang },
+        metaView(question, c.quizId, quizCount > 1),
+        fallbackView(lang),
+        rich('h2', renderInline(question.title, translation.resolve), { class: 'question-title' }),
+        question.body ? rich('div', renderBlock(question.body, translation.resolve), { class: 'question-body' }) : null,
+        readingAnswers(question, translation.resolve),
+        correctionView(question, translation.resolve),
+      );
+    }),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // Results
 
 function answerText(question: Question, indices: number[], resolve: MediaResolver): string {
@@ -600,12 +675,91 @@ function answerText(question: Question, indices: number[], resolve: MediaResolve
 }
 
 function resultsView(): HTMLElement[] {
+  return state.session!.config.mode === 'training' ? trainingResultsView() : quizResultsView();
+}
+
+function reviewItem(item: Item, withPoints: boolean): HTMLElement | null {
+  const r = resolveItem(item);
+  if (!r) return null;
+  const { question, translation } = r;
+  return h(
+    'details',
+    { class: `mistake outcome-${outcome(item)}`, lang: r.lang },
+    h(
+      'summary',
+      {},
+      h('span', { class: 'summary-title', html: renderInline(question.title, translation.resolve) }),
+      withPoints ? h('span', { class: 'points' }, signed(POINTS[outcome(item)])) : null,
+    ),
+    question.body ? rich('div', renderBlock(question.body, translation.resolve), { class: 'question-body' }) : null,
+    h(
+      'dl',
+      {},
+      withPoints
+        ? [
+            h('dt', {}, t('results.yourAnswer')),
+            rich('dd', answerText(question, item.selected, translation.resolve) + (item.hinted ? ` <em class="muted">${t('q.withHint')}</em>` : ''), {
+              class: item.result === 'correct' ? 'correct' : 'wrong',
+            }),
+          ]
+        : null,
+      h('dt', {}, t('results.expected')),
+      rich('dd', answerText(question, expectedAnswers(question), translation.resolve), { class: 'correct' }),
+    ),
+    correctionView(question, translation.resolve),
+  );
+}
+
+function trainingResultsView(): HTMLElement[] {
+  const session = state.session!;
+  const p = trainingProgress(session);
+  const finished = p.mastered === p.total;
+  const seen = new Set<string>();
+  const retried = session.items.filter((i) => {
+    const key = `${i.quizId}/${i.questionId}`;
+    if (i.attempt < 2 || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return [
+    h('h1', {}, t(finished ? 'train.done' : 'train.stopped')),
+    h(
+      'section',
+      { class: 'card score' },
+      h('div', { class: 'score-ring', style: `--pct:${Math.round((p.mastered / p.total) * 100)}` }, h('span', {}, `${p.mastered}/${p.total}`)),
+      h(
+        'ul',
+        { class: 'outcomes' },
+        h('li', { class: 'outcome-correct' }, h('span', {}, t('train.mastered')), h('strong', {}, String(p.mastered)), h('span')),
+        h('li', {}, h('span', {}, t('train.firstTry')), h('strong', {}, String(p.firstTry)), h('span')),
+        h('li', { class: 'outcome-wrong' }, h('span', {}, t('train.retried')), h('strong', {}, String(p.retried)), h('span')),
+      ),
+    ),
+    h(
+      'div',
+      { class: 'row actions' },
+      h(
+        'button',
+        {
+          class: 'button primary',
+          onclick: () => {
+            state.session = newSession(state.library, session.config);
+            go('question');
+          },
+        },
+        t('train.again'),
+      ),
+      h('button', { class: 'button ghost', onclick: () => go('config') }, t('results.settings')),
+    ),
+    retried.length ? h('section', { class: 'card' }, h('h2', {}, t('train.review')), retried.map((item) => reviewItem(item, false))) : null,
+  ].filter(Boolean) as HTMLElement[];
+}
+
+function quizResultsView(): HTMLElement[] {
   const session = state.session!;
   const s = score(state.library, session);
   const pct = s.maxPoints ? Math.round((Math.max(0, s.points) / s.maxPoints) * 100) : 0;
   const toRetry = session.items.filter((i) => outcome(i) !== 'correct');
-  // In "end" mode the user has not seen any correction yet: list every question.
-  const reviewed = session.config.feedback === 'end' ? session.items : toRetry;
   const outcomes: Outcome[] = ['correct', 'correctWithHint', 'wrong', 'wrongWithHint', 'unanswered'];
 
   return [
@@ -674,35 +828,15 @@ function resultsView(): HTMLElement[] {
       ),
       h('button', { class: 'button ghost', onclick: () => go('config') }, t('results.settings')),
     ),
-    reviewed.length
+    s.points === s.maxPoints ? h('p', { class: 'card perfect' }, t('results.perfect')) : null,
+    session.items.length
       ? h(
           'section',
           { class: 'card' },
-          h('h2', {}, t(session.config.feedback === 'end' ? 'results.correction' : 'results.mistakes')),
-          reviewed.map((item) => {
-            const r = resolveItem(item);
-            if (!r) return null;
-            const { question, translation } = r;
-            return h(
-              'details',
-              { class: `mistake outcome-${outcome(item)}`, lang: r.lang },
-              h('summary', {}, h('span', { class: 'summary-title', html: renderInline(question.title, translation.resolve) }), h('span', { class: 'points' }, signed(POINTS[outcome(item)]))),
-              question.body ? rich('div', renderBlock(question.body, translation.resolve), { class: 'question-body' }) : null,
-              h(
-                'dl',
-                {},
-                h('dt', {}, t('results.yourAnswer')),
-                rich('dd', answerText(question, item.selected, translation.resolve) + (item.hinted ? ` <em class="muted">${t('q.withHint')}</em>` : ''), {
-                  class: item.result === 'correct' ? 'correct' : 'wrong',
-                }),
-                h('dt', {}, t('results.expected')),
-                rich('dd', answerText(question, expectedAnswers(question), translation.resolve), { class: 'correct' }),
-              ),
-              correctionView(question, translation.resolve),
-            );
-          }),
+          h('h2', {}, t('results.correction')),
+          session.items.map((item) => reviewItem(item, true)),
         )
-      : h('p', { class: 'card perfect' }, t('results.perfect')),
+      : null,
   ].filter(Boolean) as HTMLElement[];
 }
 
