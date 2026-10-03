@@ -18,7 +18,7 @@ route dans [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Utiliser l'application
 
-En ligne, si GitHub Pages est activé : `https://<owner>.github.io/FlashCards/`.
+En ligne : https://ithasu.github.io/flashcards/
 
 Pour charger des quiz :
 
@@ -75,11 +75,9 @@ npm run check        # tout : types, tests, scripts de la skill, exemples, build
   `flashcards-web-vX.Y.Z.zip`, l'application prête à déposer sur n'importe quel
   serveur web statique (elle fonctionne dans un sous-dossier), et
   `quiz-generator-skill-vX.Y.Z.zip`.
-- **GitHub Pages** : activer une fois *Settings → Pages → Source : GitHub
-  Actions*. L'application est ensuite déployée à chaque release, ou à la
-  demande avec le workflow « Deploy to GitHub Pages ». Chaque dépôt peut avoir
-  son site Pages (`https://<owner>.github.io/<repo>/`), en plus du site
-  personnel `https://<owner>.github.io/`.
+- **GitHub Pages** : l'application est déployée sur
+  https://ithasu.github.io/flashcards/ à chaque push sur `main`, après chaque
+  release, ou à la demande avec le workflow « Deploy to GitHub Pages ».
 
 ## Licence
 

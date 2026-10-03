@@ -1,8 +1,11 @@
-# Deploys the web app to GitHub Pages (https://<owner>.github.io/<repo>/).
-# One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Deploys the web app to GitHub Pages (https://<owner>.github.io/<repo>/) on every push to main,
+# on demand, and after each release.
+# One-time setup (done): Settings → Pages → Build and deployment → Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
   workflow_call:
 

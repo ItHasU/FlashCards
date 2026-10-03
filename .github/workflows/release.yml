@@ -1,7 +1,7 @@
 # Push a tag such as v0.1.0 to publish a release with:
 #   - flashcards-web-<tag>.zip : the static web app, ready to upload to any web server
 #   - quiz-generator-skill-<tag>.zip : the Claude skill
-# then deploy the app to GitHub Pages (that job fails harmlessly until Pages is enabled).
+# then deploy the app to GitHub Pages.
 name: Release
 
 on:
