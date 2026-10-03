@@ -15,6 +15,14 @@ const en = {
   'load.nothing': 'No usable quiz was found in these files.',
   'load.privacy': 'Files stay in your browser: nothing is uploaded.',
 
+  'history.title': 'Recently loaded',
+  'history.privacy': 'Kept in this browser only.',
+  'history.fromUrl': 'URL',
+  'history.fromFiles': 'file: {names}',
+  'history.unavailable': 'Too large to be kept: drop the file again.',
+  'history.remove': 'Remove from history',
+  'history.clear': 'Clear history',
+
   'issues.title': '{n} problem(s) found while loading',
   'issues.error': 'Error',
   'issues.warning': 'Warning',
@@ -127,6 +135,14 @@ const fr: Dictionary = {
   'load.failed': 'Impossible de charger {name} : {error}',
   'load.nothing': 'Aucun quiz utilisable dans ces fichiers.',
   'load.privacy': 'Les fichiers restent dans votre navigateur : rien n’est envoyé.',
+
+  'history.title': 'Chargés récemment',
+  'history.privacy': 'Conservé uniquement dans ce navigateur.',
+  'history.fromUrl': 'URL',
+  'history.fromFiles': 'fichier : {names}',
+  'history.unavailable': 'Trop volumineux pour être conservé : déposez à nouveau le fichier.',
+  'history.remove': 'Retirer de l’historique',
+  'history.clear': 'Effacer l’historique',
 
   'issues.title': '{n} problème(s) détecté(s) au chargement',
   'issues.error': 'Erreur',

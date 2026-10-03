@@ -27,15 +27,17 @@ function blobUrl(data: Blob | ArrayBuffer, name: string): string {
 }
 
 export interface LoadSummary {
-  quizzes: number;
+  /** Ids of the quizzes loaded (one per file loaded, so translations repeat the id). */
+  ids: string[];
   failures: string[];
 }
 
-function addText(library: Library, text: string, path: string, resolve: MediaResolver, mediaExists?: (p: string) => boolean): boolean {
+/** Adds a quiz file to the library; returns its quiz id, or null if the file is unusable. */
+function addText(library: Library, text: string, path: string, resolve: MediaResolver, mediaExists?: (p: string) => boolean): string | null {
   const { quiz, issues } = loadQuiz(text, { path, mediaExists });
   if (quiz) library.add(quiz, resolve, issues);
   else library.addIssues(issues);
-  return quiz !== null;
+  return quiz?.meta.id ?? null;
 }
 
 /** Resolver for files inside a bundle: local paths map to blob URLs, absolute URLs are kept. */
@@ -46,7 +48,7 @@ function bundleResolver(path: string, media: Map<string, string>): MediaResolver
   };
 }
 
-async function loadZip(library: Library, data: Blob | ArrayBuffer, zipName: string): Promise<number> {
+async function loadZip(library: Library, data: Blob | ArrayBuffer, zipName: string): Promise<string[]> {
   const zip = await JSZip.loadAsync(data);
   const entries = Object.values(zip.files).filter((f) => !f.dir && !f.name.startsWith('__MACOSX/'));
   const media = new Map<string, string>();
@@ -59,30 +61,32 @@ async function loadZip(library: Library, data: Blob | ArrayBuffer, zipName: stri
       media.set(entry.name, blobUrl(await entry.async('arraybuffer'), entry.name));
     }
   }
-  let count = 0;
+  const ids: string[] = [];
   for (const [name, text] of texts) {
     const display = `${zipName}:${name}`;
     const prefix = `${zipName}:`;
     const resolve = bundleResolver(name, media);
     const exists = (p: string) => media.has(p.startsWith(prefix) ? p.slice(prefix.length) : p);
-    if (addText(library, text, display, (t) => resolve(t), exists)) count++;
+    const id = addText(library, text, display, (t) => resolve(t), exists);
+    if (id) ids.push(id);
   }
   if (texts.length === 0) library.addIssues([{ severity: 'error', message: 'No quiz file in this archive.', file: zipName }]);
-  return count;
+  return ids;
 }
 
 /** Loads files picked or dropped by the user: .md, .zip, and loose media referenced by the .md files. */
 export async function loadFiles(library: Library, files: File[]): Promise<LoadSummary> {
-  const summary: LoadSummary = { quizzes: 0, failures: [] };
+  const summary: LoadSummary = { ids: [], failures: [] };
   const loose = new Map<string, string>();
   for (const f of files) if (!/\.(md|zip)$/i.test(f.name)) loose.set(f.name, blobUrl(f, f.name));
   const looseResolver: MediaResolver = (target) => (isLocalPath(target) ? loose.get(fileName(resolveMediaPath(undefined, target))) : target);
 
   for (const f of files) {
     try {
-      if (/\.zip$/i.test(f.name)) summary.quizzes += await loadZip(library, f, f.name);
+      if (/\.zip$/i.test(f.name)) summary.ids.push(...(await loadZip(library, f, f.name)));
       else if (/\.md$/i.test(f.name)) {
-        if (addText(library, await f.text(), f.name, looseResolver)) summary.quizzes++;
+        const id = addText(library, await f.text(), f.name, looseResolver);
+        if (id) summary.ids.push(id);
       }
     } catch (e) {
       summary.failures.push(`${f.name}: ${(e as Error).message}`);
@@ -93,7 +97,7 @@ export async function loadFiles(library: Library, files: File[]): Promise<LoadSu
 
 /** Loads a quiz from a URL (.md, or .zip). Media of a .md are resolved relative to its URL. */
 export async function loadUrl(library: Library, url: string): Promise<LoadSummary> {
-  const summary: LoadSummary = { quizzes: 0, failures: [] };
+  const summary: LoadSummary = { ids: [], failures: [] };
   try {
     const absolute = new URL(url, location.href).href;
     const response = await fetch(absolute);
@@ -101,10 +105,11 @@ export async function loadUrl(library: Library, url: string): Promise<LoadSummar
     const name = fileName(new URL(absolute).pathname) || absolute;
     const type = response.headers.get('content-type') ?? '';
     if (/\.zip$/i.test(name) || type.includes('zip')) {
-      summary.quizzes += await loadZip(library, await response.arrayBuffer(), name);
+      summary.ids.push(...(await loadZip(library, await response.arrayBuffer(), name)));
     } else {
       const resolve: MediaResolver = (target) => new URL(target, absolute).href;
-      if (addText(library, await response.text(), name, resolve)) summary.quizzes++;
+      const id = addText(library, await response.text(), name, resolve);
+      if (id) summary.ids.push(id);
     }
   } catch (e) {
     summary.failures.push(`${url}: ${(e as Error).message}`);

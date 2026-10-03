@@ -3,6 +3,7 @@ import { LEVELS, QUESTION_TYPES, type Issue, type Level, type Question, type Que
 import { h, rich } from './dom';
 import { getLanguage, languageName, setLanguage, t, UI_LANGUAGES, type MessageKey } from './i18n';
 import { Library, type MediaResolver } from './library';
+import { addToHistory, clearHistory, filesSource, readHistory, removeFromHistory, restoreFiles, urlsKey, type HistoryEntry, type HistorySource } from './history';
 import { loadFiles, loadUrl, loadUrls, type LoadSummary } from './loader';
 import { renderBlock, renderInline } from './markdown';
 import {
@@ -34,6 +35,7 @@ const state = {
   config: undefined as Config | undefined,
   session: undefined as Session | undefined,
   loading: false,
+  history: readHistory(),
   failures: [] as string[],
 };
 
@@ -111,15 +113,32 @@ function issuesView(issues: Issue[]): HTMLElement | null {
 // ---------------------------------------------------------------------------
 // Home: loading quizzes
 
-async function runLoad(task: () => Promise<LoadSummary[]>): Promise<void> {
+interface Origin {
+  key: string;
+  source: HistorySource;
+}
+
+/** Remembers a successful load in the history (localStorage). */
+function recordHistory(origin: Origin, ids: string[]): void {
+  const quizzes = [...new Set(ids)].flatMap((id) => {
+    const bundle = state.library.bundles.get(id);
+    if (!bundle) return [];
+    const titles = Object.fromEntries([...bundle.translations].map(([lang, tr]) => [lang, tr.quiz.meta.title]));
+    return [{ id, titles, languages: [...bundle.translations.keys()], questions: bundle.questionIds.length }];
+  });
+  state.history = addToHistory({ key: origin.key, quizzes, source: origin.source, loadedAt: new Date().toISOString() });
+}
+
+async function runLoad(task: () => Promise<LoadSummary[]>, origin?: Origin | Promise<Origin>): Promise<void> {
   state.loading = true;
   state.failures = [];
   render();
   const summaries = await task();
   state.loading = false;
   state.failures = summaries.flatMap((s) => s.failures);
-  const loaded = summaries.reduce((n, s) => n + s.quizzes, 0);
-  if (loaded > 0) {
+  const ids = summaries.flatMap((s) => s.ids);
+  if (ids.length > 0) {
+    if (origin) recordHistory(await origin, ids);
     syncConfig();
     go('config');
   } else {
@@ -136,7 +155,7 @@ function homeView(): HTMLElement[] {
     class: 'sr-only',
     onchange: (e: Event) => {
       const files = [...((e.target as HTMLInputElement).files ?? [])];
-      if (files.length) void runLoad(async () => [await loadFiles(state.library, files)]);
+      if (files.length) void runLoad(async () => [await loadFiles(state.library, files)], filesSource(files));
     },
   });
   const drop = h(
@@ -151,7 +170,7 @@ function homeView(): HTMLElement[] {
       ondrop: (e: Event) => {
         e.preventDefault();
         const files = [...((e as DragEvent).dataTransfer?.files ?? [])];
-        if (files.length) void runLoad(async () => [await loadFiles(state.library, files)]);
+        if (files.length) void runLoad(async () => [await loadFiles(state.library, files)], filesSource(files));
       },
     },
     input,
@@ -169,7 +188,7 @@ function homeView(): HTMLElement[] {
       onsubmit: (e: Event) => {
         e.preventDefault();
         const url = urlInput.value.trim();
-        if (url) void runLoad(async () => [await loadUrl(state.library, url)]);
+        if (url) void runLoad(async () => [await loadUrl(state.library, url)], { key: urlsKey([url]), source: { kind: 'urls', urls: [url] } });
       },
     },
     urlInput,
@@ -189,7 +208,78 @@ function homeView(): HTMLElement[] {
       state.failures.length ? h('ul', { class: 'failures' }, state.failures.map((f) => h('li', {}, f))) : null,
       issuesView(state.library.issues),
     ),
+    historyView(),
   ].filter(Boolean) as HTMLElement[];
+}
+
+function reopen(entry: HistoryEntry): void {
+  const origin = { key: entry.key, source: entry.source };
+  if (entry.source.kind === 'urls') {
+    const urls = entry.source.urls;
+    void runLoad(() => loadUrls(state.library, urls), origin);
+    return;
+  }
+  const files = restoreFiles(entry.source);
+  if (files) void runLoad(async () => [await loadFiles(state.library, files)], origin);
+}
+
+function historyView(): HTMLElement | null {
+  if (!state.history.length) return null;
+  const lang = getLanguage();
+  const date = new Intl.DateTimeFormat(lang, { dateStyle: 'medium', timeStyle: 'short' });
+  return h(
+    'section',
+    { class: 'card history' },
+    h('h2', {}, t('history.title')),
+    h('p', { class: 'muted small' }, t('history.privacy')),
+    h(
+      'ul',
+      { class: 'history-list' },
+      state.history.map((entry) => {
+        const available = entry.source.kind === 'urls' || restoreFiles(entry.source) !== null;
+        const title = entry.quizzes.map((q) => q.titles[lang] ?? q.titles[lang.split('-')[0]] ?? Object.values(q.titles)[0]).join(' + ');
+        const languages = [...new Set(entry.quizzes.flatMap((q) => q.languages))].map((l) => l.toUpperCase()).join(', ');
+        const questions = entry.quizzes.reduce((n, q) => n + q.questions, 0);
+        const origin = entry.source.kind === 'urls' ? t('history.fromUrl') : t('history.fromFiles', { names: entry.source.names.join(', ') });
+        return h(
+          'li',
+          { class: 'history-entry' },
+          h(
+            'button',
+            { class: 'history-open', disabled: !available, title: available ? '' : t('history.unavailable'), onclick: () => reopen(entry) },
+            h('strong', {}, title),
+            h('span', { class: 'muted small' }, `${t('config.questionsCount', { n: questions })} · ${languages} · ${origin} · ${date.format(new Date(entry.loadedAt))}`),
+            available ? null : h('span', { class: 'small warning-text' }, t('history.unavailable')),
+          ),
+          h(
+            'button',
+            {
+              class: 'button ghost small history-remove',
+              'aria-label': t('history.remove'),
+              title: t('history.remove'),
+              onclick: () => {
+                state.history = removeFromHistory(entry.key);
+                render();
+              },
+            },
+            '×',
+          ),
+        );
+      }),
+    ),
+    h(
+      'button',
+      {
+        class: 'button ghost small',
+        onclick: () => {
+          clearHistory();
+          state.history = [];
+          render();
+        },
+      },
+      t('history.clear'),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -847,7 +937,7 @@ async function init(): Promise<void> {
   setLanguage(getLanguage());
   const urls = new URLSearchParams(location.search).getAll('quiz');
   render();
-  if (urls.length) await runLoad(() => loadUrls(state.library, urls));
+  if (urls.length) await runLoad(() => loadUrls(state.library, urls), { key: urlsKey(urls), source: { kind: 'urls', urls } });
 }
 
 void init();
