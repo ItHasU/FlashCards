@@ -18,7 +18,7 @@ route dans [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Utiliser l'application
 
-En ligne : https://ithasu.github.io/flashcards/
+En ligne : https://ithasu.github.io/FlashCards/
 
 Pour charger des quiz :
 
@@ -76,7 +76,7 @@ npm run check        # tout : types, tests, scripts de la skill, exemples, build
   serveur web statique (elle fonctionne dans un sous-dossier), et
   `quiz-generator-skill-vX.Y.Z.zip`.
 - **GitHub Pages** : l'application est déployée sur
-  https://ithasu.github.io/flashcards/ à chaque push sur `main`, après chaque
+  https://ithasu.github.io/FlashCards/ à chaque push sur `main`, après chaque
   release, ou à la demande avec le workflow « Deploy to GitHub Pages ».
 
 ## Licence
