@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseQuiz } from '../../format/src';
 import { Library } from '../src/library';
-import { candidates, isCorrect, newSession, shuffle } from '../src/session';
+import { candidates, isCorrect, newSession, POINTS, score, shuffle } from '../src/session';
 
 const quiz = (lang: string, mcq: string, tf = 'true') =>
   parseQuiz(
@@ -52,10 +52,27 @@ describe('session', () => {
   it('draws the requested number of questions', () => {
     const lib = new Library();
     lib.add(quiz('en', '- [x] a\n- [ ] b\n- [ ] c'), noMedia);
-    const s = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 1 });
+    const s = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 1, feedback: 'end' });
     expect(s.items).toHaveLength(1);
-    const all = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10 });
+    const all = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10, feedback: 'end' });
     const mcq = all.items.find((i) => i.questionId === 'q1')!;
     expect([...mcq.order].sort()).toEqual([0, 1, 2]);
+  });
+
+  it('scores points: +2 correct, -1 wrong, 0 revealed or unanswered', () => {
+    expect(POINTS).toEqual({ correct: 2, wrong: -1, revealed: 0, unanswered: 0 });
+    const lib = new Library();
+    lib.add(quiz('en', '- [x] a\n- [ ] b'), noMedia);
+    const session = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10, feedback: 'end' });
+    const [first, second] = session.items;
+    first.result = 'correct';
+    second.result = 'wrong';
+    expect(score(lib, session)).toMatchObject({ points: 1, maxPoints: 4, counts: { correct: 1, wrong: 1, revealed: 0, unanswered: 0 } });
+    second.result = 'revealed';
+    expect(score(lib, session).points).toBe(2);
+    second.result = undefined;
+    expect(score(lib, session)).toMatchObject({ points: 2, counts: { unanswered: 1 } });
+    const levels = score(lib, session).byLevel;
+    expect([...levels.values()].reduce((n, l) => n + l.maxPoints, 0)).toBe(4);
   });
 });

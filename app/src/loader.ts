@@ -119,20 +119,4 @@ export async function loadUrls(library: Library, urls: string[]): Promise<LoadSu
   return out;
 }
 
-export interface ExampleEntry {
-  id: string;
-  titles: Record<string, string>;
-  files: string[];
-}
-
-export async function fetchExamples(): Promise<ExampleEntry[]> {
-  try {
-    const response = await fetch('examples/index.json');
-    if (!response.ok) return [];
-    return (await response.json()) as ExampleEntry[];
-  } catch {
-    return [];
-  }
-}
-
 export type { Issue };
