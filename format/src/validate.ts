@@ -13,6 +13,12 @@ export interface ValidateOptions {
 const POSITIONAL_ANSWER_RE =
   /^(all|none|both) of (the )?(above|these|them)|^(toutes|aucune|tous|aucun) (les réponses |des réponses )?(ci-dessus|précédentes)|^les deux/i;
 
+// Questions are drawn at random: they must not refer to other questions or to "the text above".
+const SELF_REFERENCE_RE =
+  /\b(previous|next|last|above|below|following) question\b|\bquestion (précédente|suivante|ci-dessus|ci-dessous)\b|\b(the|this) (text|document|passage|article) (above|below)\b|\b(le|ce) (texte|document|passage) ci-(dessus|dessous)\b/i;
+
+const plain = (md: string) => md.replace(/[`*_]/g, '').trim();
+
 const LOCAL_REF_RE = /!?\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/g;
 
 /** Returns true for paths that point inside the quiz bundle (not URLs, anchors or data URIs). */
@@ -61,10 +67,21 @@ function validateQuestion(q: Question, quiz: QuizFile, options: ValidateOptions,
       if (POSITIONAL_ANSWER_RE.test(a.text.trim()))
         warn(`Answer "${a.text}" refers to other answers; it makes no sense once answers are shuffled.`);
     }
+    const correct = q.answers.filter((a) => a.correct);
+    const wrong = q.answers.filter((a) => !a.correct);
+    if (correct.length === 1 && wrong.length >= 2) {
+      const longestWrong = Math.max(...wrong.map((a) => plain(a.text).length));
+      const len = plain(correct[0].text).length;
+      if (len > longestWrong * 1.6 && len - longestWrong > 15)
+        warn('The correct answer is much longer than every distractor, which gives it away: rebalance the lengths.');
+    }
   } else {
     if (q.answers.length > 0) err('A true-false question must not have an answer list; use "answer: true|false" in its metadata.');
     if (q.answer === undefined) err('A true-false question needs "answer: true" or "answer: false" in its metadata.');
   }
+
+  if (SELF_REFERENCE_RE.test(`${q.title}\n${q.body}`))
+    warn('The question refers to another question or to "the text above"; questions are drawn at random and must be self-contained.');
 
   if (q.sources.length === 0) err('Every question needs at least one "> [!source] <type>" block.');
   for (const s of q.sources) {
@@ -99,7 +116,13 @@ export function validateQuiz(quiz: QuizFile, options: ValidateOptions = {}): Iss
     push({ severity: 'error', message: 'The quiz contains no valid question.', file: quiz.path });
 
   const ids = new Map<string, number>();
+  const titles = new Map<string, string>();
   for (const q of quiz.questions) {
+    const title = `${plain(q.title).toLowerCase()}\n${q.body}`;
+    const sameTitle = titles.get(title);
+    if (sameTitle !== undefined && sameTitle !== q.id)
+      push({ severity: 'warning', message: `Same statement as question "${sameTitle}".`, line: q.line, questionId: q.id, file: quiz.path });
+    else titles.set(title, q.id);
     const previous = ids.get(q.id);
     if (previous !== undefined)
       push({

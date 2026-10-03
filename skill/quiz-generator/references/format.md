@@ -193,8 +193,19 @@ A question missing in one language is shown in the quiz's other languages
 ## 6. Validation
 
 ```bash
-node skill/quiz-generator/scripts/validate.mjs <file.md | folder | bundle.zip>...
+node skill/quiz-generator/scripts/validate.mjs [--sources <material>]... [--json] [--strict] <file.md | folder | bundle.zip>...
 ```
 
-Errors make a question (or the whole file) unusable; warnings are advice. The
-app runs the same checks when loading a file and skips invalid questions.
+- **Errors** make a question (or the whole file) unusable: the app skips it.
+- **Warnings** point at quality problems: a correct answer much longer than
+  the distractors, a question that refers to another one, a duplicated
+  statement, an excerpt without attribution, inconsistent translations…
+- `--sources` takes the material the quiz was built from (text, Markdown,
+  HTML, code… files or folders) and warns about every `excerpt` that does not
+  appear word for word in it. Typography (curly quotes, dashes), Markdown
+  formatting, case and whitespace are ignored; `[…]` splits a quotation into
+  fragments checked separately.
+- `--json` prints the issues plus statistics (questions per level, type,
+  source type and tag) and advice on the balance of the quiz.
+
+The app runs the same per-file checks when loading a file.

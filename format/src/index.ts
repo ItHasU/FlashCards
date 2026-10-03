@@ -11,3 +11,12 @@ export {
   type LoadResult,
   type ValidateOptions,
 } from './validate';
+export {
+  checkExcerpts,
+  excerptFragments,
+  htmlToText,
+  normalizeForMatch,
+  quizAdvice,
+  quizStats,
+  type QuizStats,
+} from './quality';

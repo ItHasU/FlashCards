@@ -13,7 +13,7 @@
     "test": "vitest run",
     "build:skill": "node scripts/build-skill.mjs",
     "validate": "node skill/quiz-generator/scripts/validate.mjs",
-    "check": "npm run typecheck && npm test && npm run build:skill && npm run validate -- examples && npm run build",
+    "check": "npm run typecheck && npm run build:skill && npm test && npm run validate -- --strict examples && npm run build",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

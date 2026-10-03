@@ -53,8 +53,10 @@ images.
 ```bash
 npm install
 npm run dev          # application en mode développement
-npm test             # tests du format et de la logique de session
+npm test             # tests du format, du validateur et de la logique de session
+npm run test:e2e     # tests de bout en bout de l'application (Playwright)
 npm run validate -- examples      # valide des quiz (fichiers, dossiers, zip)
+npm run validate -- quiz/ --sources doc.md   # + vérifie les citations mot pour mot
 npm run build:skill  # régénère les scripts de la skill depuis format/
 npm run check        # tout : types, tests, scripts de la skill, exemples, build
 ```

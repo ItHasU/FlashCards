@@ -19,12 +19,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
       - name: Skill scripts are up to date
         run: |
           npm run build:skill
           git diff --exit-code -- skill/ || (echo "::error::Run 'npm run build:skill' and commit the result." && exit 1)
+      - run: npm test
       - run: npm run validate -- --strict examples
+      - run: npm run validate -- --strict examples/flashcards-format --sources docs/format.md --sources format/src
       - run: npm run build
 
   e2e:

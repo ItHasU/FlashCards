@@ -110,15 +110,35 @@ one exists.
 
 ### 8. Validate
 
-Run the validator on the output folder and fix every error; also fix warnings
-unless you have a good reason:
+Run the validator on the output folder. Whenever the material is available as
+text, pass it with `--sources` so that every `excerpt` is checked word for word:
 
 ```bash
-node <skill-dir>/scripts/validate.mjs <output-folder>
+node <skill-dir>/scripts/validate.mjs <output-folder> --sources <material>...
 ```
 
-`<skill-dir>` is the folder containing this SKILL.md. The script needs Node.js
-18+ and nothing else.
+- `<skill-dir>` is the folder containing this SKILL.md. The script needs
+  Node.js 18+ and nothing else.
+- `--sources` accepts files and folders (Markdown, text, HTML, code, JSON,
+  YAML…), and can be repeated. Convert other formats to text first and pass
+  the converted files: `pdftotext doc.pdf /tmp/quiz-src/doc.txt`, a DOCX
+  saved as text, or the web pages you fetched saved as `.md`/`.html` in a
+  scratch folder. For a repository, pass the repository folder itself.
+- Add `--json` for a machine-readable report: `issues` (each with file, line,
+  question id and message), and per quiz `stats` (questions per level, type,
+  source type, tag) and `advice`.
+
+Then:
+
+1. Fix every **ERROR**: the question is unusable (the app skips it).
+2. Fix every **WARNING**, in particular "Excerpt not found verbatim" (re-copy
+   the exact words from the material), "correct answer is much longer"
+   (rebalance) and "not self-contained". Keep a warning only with a good
+   reason, and say so in your final summary.
+3. Read the **ADVICE** lines (level mix, share of true/false, balance of
+   true/false answers, explanations) and compare the stats with the plan from
+   step 1; add or rework questions if the quiz is unbalanced.
+4. Re-run until there are no errors.
 
 ### 9. Deliver
 
