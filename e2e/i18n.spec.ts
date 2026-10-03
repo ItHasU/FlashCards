@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loadExample, setFeedback } from './helpers';
+import { loadExample, setMode } from './helpers';
 
 test.describe('languages', () => {
   test.describe('with a French browser', () => {
@@ -24,7 +24,7 @@ test.describe('languages', () => {
     await page.goto('./');
     await loadExample(page, 'The TCP three-way handshake');
     await page.locator('.chip', { hasText: 'standards' }).click();
-    await setFeedback(page, 'immediate');
+    await setMode(page, 'training');
     await page.getByRole('button', { name: 'Start' }).click();
 
     await expect(page.locator('.question-title')).toHaveText('Which RFC is the current specification of TCP?');
