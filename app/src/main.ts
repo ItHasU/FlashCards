@@ -3,7 +3,7 @@ import { LEVELS, QUESTION_TYPES, type Issue, type Level, type Question, type Que
 import { h, rich } from './dom';
 import { getLanguage, languageName, setLanguage, t, UI_LANGUAGES, type MessageKey } from './i18n';
 import { Library, type MediaResolver } from './library';
-import { fetchExamples, loadFiles, loadUrl, type ExampleEntry, type LoadSummary } from './loader';
+import { fetchExamples, loadFiles, loadUrl, loadUrls, type ExampleEntry, type LoadSummary } from './loader';
 import { renderBlock, renderInline } from './markdown';
 import {
   candidates,
@@ -181,7 +181,7 @@ function homeView(): HTMLElement[] {
               'button',
               {
                 class: 'button example',
-                onclick: () => void runLoad(() => Promise.all(ex.files.map((f) => loadUrl(state.library, f)))),
+                onclick: () => void runLoad(() => loadUrls(state.library, ex.files)),
               },
               ex.titles[lang] ?? ex.titles[lang.split('-')[0]] ?? Object.values(ex.titles)[0],
               h('span', { class: 'muted' }, ` · ${Object.keys(ex.titles).map((l) => l.toUpperCase()).join(' / ')}`),
@@ -300,7 +300,7 @@ function configView(): HTMLElement[] {
     }),
   );
 
-  const chips = <T extends string | number>(legend: string, values: readonly T[], selected: T[], label: (v: T) => string, set: (v: T[]) => void, hint?: string) =>
+  const chips = <T extends string | number>(legend: string, values: readonly T[], get: () => T[], label: (v: T) => string, set: (v: T[]) => void, hint?: string) =>
     h(
       'fieldset',
       {},
@@ -315,9 +315,9 @@ function configView(): HTMLElement[] {
             { class: 'chip' },
             h('input', {
               type: 'checkbox',
-              checked: selected.includes(v),
+              checked: get().includes(v),
               onchange: (e: Event) => {
-                set(toggle(selected, v, (e.target as HTMLInputElement).checked));
+                set(toggle(get(), v, (e.target as HTMLInputElement).checked));
                 update();
               },
             }),
@@ -356,9 +356,9 @@ function configView(): HTMLElement[] {
     h(
       'section',
       { class: 'card' },
-      chips(t('config.levels'), LEVELS, config.levels, (l) => `${l} · ${t(`level.${l}` as MessageKey)}`, (v) => (config.levels = v as Level[])),
-      chips(t('config.types'), QUESTION_TYPES, config.types, (ty) => t(`type.${ty}` as MessageKey), (v) => (config.types = v as QuestionType[])),
-      tags.length ? chips(t('config.tags'), tags, config.tags, (tag) => tag, (v) => (config.tags = v), t('config.tagsHint')) : null,
+      chips(t('config.levels'), LEVELS, () => config.levels, (l) => `${l} · ${t(`level.${l}` as MessageKey)}`, (v) => (config.levels = v as Level[])),
+      chips(t('config.types'), QUESTION_TYPES, () => config.types, (ty) => t(`type.${ty}` as MessageKey), (v) => (config.types = v as QuestionType[])),
+      tags.length ? chips(t('config.tags'), tags, () => config.tags, (tag) => tag, (v) => (config.tags = v), t('config.tagsHint')) : null,
       h('fieldset', {}, h('legend', {}, t('config.count')), h('div', { class: 'count' }, countRange, countInput)),
       availableEl,
       startBtn,
@@ -654,7 +654,7 @@ async function init(): Promise<void> {
   setLanguage(getLanguage());
   const urls = new URLSearchParams(location.search).getAll('quiz');
   render();
-  if (urls.length) await runLoad(() => Promise.all(urls.map((u) => loadUrl(state.library, u))));
+  if (urls.length) await runLoad(() => loadUrls(state.library, urls));
   state.examples = await fetchExamples();
   if (state.screen === 'home') render();
 }

@@ -13,9 +13,11 @@
     "test": "vitest run",
     "build:skill": "node scripts/build-skill.mjs",
     "validate": "node skill/quiz-generator/scripts/validate.mjs",
-    "check": "npm run typecheck && npm test && npm run build:skill && npm run validate -- examples && npm run build"
+    "check": "npm run typecheck && npm test && npm run build:skill && npm run validate -- examples && npm run build",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.4",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2",

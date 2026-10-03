@@ -112,6 +112,13 @@ export async function loadUrl(library: Library, url: string): Promise<LoadSummar
   return summary;
 }
 
+/** Loads several URLs, adding them to the library in the given order (the first file sets the default language). */
+export async function loadUrls(library: Library, urls: string[]): Promise<LoadSummary[]> {
+  const out: LoadSummary[] = [];
+  for (const url of urls) out.push(await loadUrl(library, url));
+  return out;
+}
+
 export interface ExampleEntry {
   id: string;
   titles: Record<string, string>;
