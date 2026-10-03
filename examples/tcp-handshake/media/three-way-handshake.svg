@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 300" width="480" height="300" font-family="system-ui, sans-serif" font-size="14">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f4e79"/>
+    </marker>
+  </defs>
+  <rect width="480" height="300" fill="#ffffff"/>
+  <text x="80" y="30" text-anchor="middle" font-weight="bold">Client</text>
+  <text x="400" y="30" text-anchor="middle" font-weight="bold">Server</text>
+  <line x1="80" y1="45" x2="80" y2="280" stroke="#555" stroke-width="2"/>
+  <line x1="400" y1="45" x2="400" y2="280" stroke="#555" stroke-width="2"/>
+  <line x1="80" y1="70" x2="400" y2="120" stroke="#1f4e79" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="240" y="82" text-anchor="middle" fill="#1f4e79">1. SYN  seq=x</text>
+  <line x1="400" y1="150" x2="80" y2="200" stroke="#1f4e79" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="240" y="162" text-anchor="middle" fill="#1f4e79">2. SYN-ACK  seq=y, ack=x+1</text>
+  <line x1="80" y1="225" x2="400" y2="275" stroke="#1f4e79" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="240" y="237" text-anchor="middle" fill="#1f4e79">3. ACK  ack=y+1</text>
+</svg>
