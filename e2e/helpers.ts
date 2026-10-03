@@ -42,9 +42,46 @@ export async function answer(page: Page, correctly: boolean): Promise<void> {
   for (const { pos } of correctly ? picks : picks.slice(0, 1)) await page.locator('.answer').nth(pos).click();
 }
 
-export async function loadExample(page: Page, title: string | RegExp): Promise<void> {
-  await page.locator('.example', { hasText: title }).click();
+/** Example folders indexed by their quiz title in every language. */
+const EXAMPLE_DIRS = new Map<string, string>();
+for (const dir of readdirSync(EXAMPLES)) {
+  for (const f of readdirSync(join(EXAMPLES, dir)).filter((n) => n.endsWith('.md'))) {
+    EXAMPLE_DIRS.set(parseQuiz(readFileSync(join(EXAMPLES, dir, f), 'utf8')).quiz!.meta.title, dir);
+  }
+}
+
+function exampleDir(title: string): string {
+  const dir = EXAMPLE_DIRS.get(title);
+  if (!dir) throw new Error(`Unknown example: ${title}`);
+  return dir;
+}
+
+/** The app URL loading the given examples with ?quiz= parameters, as the README links do. */
+export function exampleUrl(...titles: string[]): string {
+  const files = titles.flatMap((title) => {
+    const dir = exampleDir(title);
+    return readdirSync(join(EXAMPLES, dir))
+      .filter((n) => n.endsWith('.md'))
+      .map((f) => `quiz=examples/${dir}/${f}`);
+  });
+  return `./?${files.join('&')}`;
+}
+
+export async function loadExample(page: Page, ...titles: string[]): Promise<void> {
+  await page.goto(exampleUrl(...titles));
   await expect(page.locator('.screen-config')).toBeVisible();
+}
+
+/** The .md files of an example, ready for setInputFiles. */
+export function exampleFiles(title: string) {
+  const dir = exampleDir(title);
+  return readdirSync(join(EXAMPLES, dir))
+    .filter((n) => n.endsWith('.md'))
+    .map((f) => ({ name: f, mimeType: 'text/markdown', buffer: readFileSync(join(EXAMPLES, dir, f)) }));
+}
+
+export async function setFeedback(page: Page, mode: 'end' | 'immediate'): Promise<void> {
+  await page.locator('.chip', { hasText: mode === 'end' ? 'At the end of the quiz' : 'After each question' }).click();
 }
 
 export async function setCount(page: Page, n: number): Promise<void> {

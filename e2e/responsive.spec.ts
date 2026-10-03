@@ -11,9 +11,8 @@ test.describe('small screens @mobile', () => {
     await page.getByRole('button', { name: 'Start' }).click();
     for (let i = 0; i < 4; i++) {
       await page.locator('.answer').first().click();
-      await page.getByRole('button', { name: 'Check' }).click();
       await noOverflow();
-      await page.locator('.actions .button.primary').click();
+      await page.locator('.actions .button.primary').click(); // "end" mode: records and moves on
     }
     await expect(page.locator('.screen-results')).toBeVisible();
     await noOverflow();

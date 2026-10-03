@@ -128,7 +128,6 @@ blockquote { margin: 0.5rem 0; padding-left: 0.9rem; border-left: 3px solid var(
   flex: 1; min-width: 0; font: inherit; padding: 0.5rem 0.7rem; border-radius: 10px;
   border: 1px solid var(--border); background: var(--surface); color: var(--text);
 }
-.examples { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .failures { color: var(--ko); }
 
 .issues { margin-top: 1rem; font-size: 0.88rem; }
@@ -243,3 +242,21 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
 }
 .source-excerpt blockquote { margin: 0 0 0.4rem; font-style: italic; color: var(--text); }
 .source-excerpt blockquote + p { color: var(--muted); font-size: 0.9rem; }
+
+.running-score { font-weight: 700; color: var(--primary); }
+.verdict .points { font-size: 0.95rem; font-weight: 700; opacity: 0.85; margin-left: 0.3rem; }
+.feedback.revealed { background: var(--primary-soft); border-color: var(--primary); }
+.feedback.revealed .verdict { color: var(--primary); }
+.outcomes { list-style: none; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.25rem; }
+.outcomes li { display: grid; grid-template-columns: 1fr 2.5rem 4.5rem; gap: 0.5rem; align-items: baseline; }
+.outcomes strong { text-align: right; }
+.outcomes .muted { text-align: right; }
+.outcome-correct > span:first-child { color: var(--ok); }
+.outcome-wrong > span:first-child { color: var(--ko); }
+.mistake summary { display: flex; gap: 0.8rem; align-items: baseline; }
+.mistake summary .summary-title { flex: 1; }
+.mistake summary .points { font-weight: 700; white-space: nowrap; }
+.mistake.outcome-correct summary .points { color: var(--ok); }
+.mistake.outcome-wrong summary .points { color: var(--ko); }
+.mistake.outcome-revealed summary .points, .mistake.outcome-unanswered summary .points { color: var(--muted); }
+.mistake dd.correct:first-of-type { color: var(--ok); }

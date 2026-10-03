@@ -1,6 +1,9 @@
 import type { Level, Question, QuestionType } from '../../format/src';
 import type { Library } from './library';
 
+/** When the correction is shown: after each question, or only on the results screen. */
+export type Feedback = 'end' | 'immediate';
+
 export interface Config {
   quizIds: string[];
   levels: Level[];
@@ -8,7 +11,16 @@ export interface Config {
   /** Empty = every tag. */
   tags: string[];
   count: number;
+  feedback: Feedback;
 }
+
+/**
+ * Outcome of a question. "revealed": the user asked to see the answer and explanation
+ * before answering; "unanswered": the session ended before the question was answered.
+ */
+export type Outcome = 'correct' | 'wrong' | 'revealed' | 'unanswered';
+
+export const POINTS: Record<Outcome, number> = { correct: 2, wrong: -1, revealed: 0, unanswered: 0 };
 
 export interface Item {
   quizId: string;
@@ -17,7 +29,7 @@ export interface Item {
   order: number[];
   /** Selected answers, as authoring-order indices. For true/false: [1] = true, [0] = false. */
   selected: number[];
-  result?: 'correct' | 'wrong';
+  result?: Exclude<Outcome, 'unanswered'>;
 }
 
 export interface Session {
@@ -41,7 +53,7 @@ export interface Candidate {
 }
 
 /** Questions matching the filters, described by their reference-language version. */
-export function candidates(library: Library, config: Omit<Config, 'count'>): Candidate[] {
+export function candidates(library: Library, config: Pick<Config, 'quizIds' | 'levels' | 'types' | 'tags'>): Candidate[] {
   const out: Candidate[] = [];
   for (const quizId of config.quizIds) {
     const bundle = library.bundles.get(quizId);
@@ -91,26 +103,41 @@ export function expectedAnswers(question: Question): number[] {
   return question.answers.flatMap((a, i) => (a.correct ? [i] : []));
 }
 
+export function outcome(item: Item): Outcome {
+  return item.result ?? 'unanswered';
+}
+
+export interface LevelScore {
+  points: number;
+  maxPoints: number;
+  questions: number;
+}
+
 export interface Score {
-  correct: number;
+  points: number;
+  /** Points if every question were answered correctly. */
+  maxPoints: number;
   total: number;
-  byLevel: Map<Level, { correct: number; total: number }>;
+  counts: Record<Outcome, number>;
+  byLevel: Map<Level, LevelScore>;
 }
 
 export function score(library: Library, session: Session): Score {
-  const byLevel = new Map<Level, { correct: number; total: number }>();
-  let correct = 0;
+  const byLevel = new Map<Level, LevelScore>();
+  const counts: Record<Outcome, number> = { correct: 0, wrong: 0, revealed: 0, unanswered: 0 };
+  let points = 0;
   for (const item of session.items) {
+    const o = outcome(item);
+    counts[o]++;
+    points += POINTS[o];
     const bundle = library.bundles.get(item.quizId);
     const q = bundle && library.question(item.quizId, item.questionId, bundle.defaultLang)?.question;
     if (!q) continue;
-    const entry = byLevel.get(q.level) ?? { correct: 0, total: 0 };
-    entry.total++;
-    if (item.result === 'correct') {
-      entry.correct++;
-      correct++;
-    }
+    const entry = byLevel.get(q.level) ?? { points: 0, maxPoints: 0, questions: 0 };
+    entry.points += POINTS[o];
+    entry.maxPoints += POINTS.correct;
+    entry.questions++;
     byLevel.set(q.level, entry);
   }
-  return { correct, total: session.items.length, byLevel };
+  return { points, maxPoints: session.items.length * POINTS.correct, total: session.items.length, counts, byLevel };
 }

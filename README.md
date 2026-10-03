@@ -10,8 +10,9 @@ Le projet a deux parties :
   FlashCards (Markdown, un fichier par langue, `.zip` s'il y a des images).
 - **`app/`** : une application web statique pour réviser. Elle tire des
   questions au hasard, mélange les réponses, filtre par niveau, type et thème,
-  et affiche la source après chaque réponse. L'interface et les quiz sont
-  multilingues, et on peut changer de langue même au milieu d'une question.
+  et affiche la correction avec sa source, à la fin du quiz ou après chaque
+  question. L'interface et les quiz sont multilingues, et on peut changer de
+  langue même au milieu d'une question.
 
 Le format est décrit dans [`docs/format.md`](docs/format.md), et la feuille de
 route dans [`docs/PLAN.md`](docs/PLAN.md).
@@ -25,10 +26,34 @@ Pour charger des quiz :
 - glisser-déposer un ou plusieurs fichiers `.md` ou `.zip`. Les traductions
   d'un même quiz et plusieurs quiz différents peuvent être chargés en même
   temps ;
-- ou passer une URL : `…/?quiz=https://exemple.org/quiz.fr.md&quiz=https://exemple.org/quiz.en.md` ;
-- ou essayer les exemples de [`examples/`](examples/).
+- ou passer une URL : `…/?quiz=https://exemple.org/quiz.fr.md&quiz=https://exemple.org/quiz.en.md`.
 
 Les fichiers restent dans le navigateur : rien n'est envoyé à un serveur.
+
+Avant de commencer, on choisit quand afficher les réponses :
+
+- **à la fin du quiz** (par défaut) : la correction complète, question par
+  question, s'affiche sur l'écran des résultats ;
+- **après chaque question** : la correction, l'explication et les sources
+  s'affichent dès qu'on valide.
+
+Barème : **+2** pour une bonne réponse, **−1** pour une erreur, **0** si l'on
+clique sur « Voir la réponse » avant de répondre (ou si la question reste sans
+réponse).
+
+## Exemples
+
+Ouvrez directement un quiz d'exemple dans l'application :
+
+| Quiz | Langues | Questions |
+|------|---------|-----------|
+| [La programmation asynchrone en TypeScript](https://ithasu.github.io/FlashCards/?quiz=examples/ts-async/quiz.fr.md) | FR | 117 |
+| [La poignée de main TCP en trois temps](https://ithasu.github.io/FlashCards/?quiz=examples/tcp-handshake/quiz.fr.md&quiz=examples/tcp-handshake/quiz.en.md) | FR, EN | 6 |
+| [Le format de quiz FlashCards](https://ithasu.github.io/FlashCards/?quiz=examples/flashcards-format/quiz.fr.md&quiz=examples/flashcards-format/quiz.en.md) | FR, EN | 7 |
+| [JavaScript closures](https://ithasu.github.io/FlashCards/?quiz=examples/js-closures/quiz.en.md) | EN | 4 |
+
+Les fichiers sources sont dans [`examples/`](examples/) ; ils servent aussi de
+jeux de test.
 
 ## Générer un quiz avec la skill
 

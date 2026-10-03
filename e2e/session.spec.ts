@@ -1,9 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { answer, currentQuestion, loadExample, setCount } from './helpers';
+import { answer, currentQuestion, exampleFiles, loadExample, setCount, setFeedback } from './helpers';
 
-async function startWith(page: Page, example: string | RegExp, setup?: () => Promise<void>) {
-  await page.goto('./');
+async function startWith(page: Page, example: string, setup?: () => Promise<void>, feedback: 'end' | 'immediate' = 'immediate') {
   await loadExample(page, example);
+  await setFeedback(page, feedback);
   await setup?.();
   await page.getByRole('button', { name: 'Start' }).click();
   await expect(page.locator('.question')).toBeVisible();
@@ -47,12 +47,12 @@ test.describe('playing', () => {
       await expect(page.getByRole('button', { name: 'Check' })).toBeDisabled();
       await answer(page, true);
       await page.getByRole('button', { name: 'Check' }).click();
-      await expect(page.locator('.feedback .verdict')).toHaveText('Correct!');
+      await expect(page.locator('.feedback .verdict')).toContainText('Correct!');
       await expect(page.locator('.sources .source').first()).toBeVisible();
       await page.getByRole('button', { name: i < 6 ? 'Next question' : 'See results' }).click();
     }
-    await expect(page.locator('.score-ring')).toHaveText('100%');
-    await expect(page.locator('.score-text')).toHaveText('6 correct answers out of 6');
+    await expect(page.locator('.score-ring')).toHaveText('12');
+    await expect(page.locator('.score-text')).toHaveText('12 points out of 12');
     await expect(page.locator('.perfect')).toBeVisible();
   });
 
@@ -62,14 +62,14 @@ test.describe('playing', () => {
       const wrong = i <= 2;
       await answer(page, !wrong);
       await page.getByRole('button', { name: 'Check' }).click();
-      await expect(page.locator('.feedback .verdict')).toHaveText(wrong ? 'Not quite.' : 'Correct!');
+      await expect(page.locator('.feedback .verdict')).toContainText(wrong ? 'Not quite.' : 'Correct!');
       if (wrong) {
         await expect(page.locator('.answer.wrong')).toHaveCount(1);
         expect(await page.locator('.answer.missed, .answer.correct').count()).toBeGreaterThan(0);
       }
       await page.getByRole('button', { name: i < 4 ? 'Next question' : 'See results' }).click();
     }
-    await expect(page.locator('.score-text')).toHaveText('2 correct answers out of 4');
+    await expect(page.locator('.score-text')).toHaveText('2 points out of 8'); // 2 × (+2) + 2 × (−1)
     await expect(page.locator('.mistake')).toHaveCount(2);
     await page.locator('.mistake summary').first().click();
     await expect(page.locator('.mistake dd.correct').first()).toBeVisible();
@@ -89,7 +89,7 @@ test.describe('playing', () => {
     const firstCorrect = texts.findIndex((t) => q.answers.some((a) => a.correct && a.text.replace(/`/g, '') === t.trim()));
     await page.locator('.answer').nth(firstCorrect).click();
     await page.getByRole('button', { name: 'Check' }).click();
-    await expect(page.locator('.feedback .verdict')).toHaveText('Not quite.');
+    await expect(page.locator('.feedback .verdict')).toContainText('Not quite.');
     await expect(page.locator('.answer.missed')).toHaveCount(1);
   });
 
@@ -100,7 +100,7 @@ test.describe('playing', () => {
     await expect(page.locator('.answer-text')).toHaveText(['True', 'False']);
     await page.getByRole('radio', { name: 'False' }).click();
     await page.getByRole('button', { name: 'Check' }).click();
-    await expect(page.locator('.feedback .verdict')).toHaveText('Correct!');
+    await expect(page.locator('.feedback .verdict')).toContainText('Correct!');
   });
 
   test('answers are shuffled between draws', async ({ page }) => {
@@ -140,7 +140,7 @@ test.describe('playing', () => {
 
     await page.getByRole('button', { name: 'Change settings' }).click();
     await page.getByRole('button', { name: 'Add quizzes' }).click();
-    await loadExample(page, 'JavaScript closures');
+    await page.locator('input[type=file]').setInputFiles(exampleFiles('JavaScript closures'));
     await page.locator('.chip', { hasText: 'levels' }).click();
     await page.locator('.quiz-choice input').first().uncheck();
     await page.locator('.chip', { hasText: 'scope' }).click();
@@ -154,7 +154,74 @@ test.describe('playing', () => {
   test('ending a session early counts unanswered questions as mistakes', async ({ page }) => {
     await startWith(page, 'The TCP three-way handshake', () => setCount(page, 3));
     await page.getByRole('button', { name: 'End session' }).click();
-    await expect(page.locator('.score-text')).toHaveText('0 correct answers out of 3');
+    await expect(page.locator('.score-text')).toHaveText('0 points out of 6');
     await expect(page.locator('.mistake')).toHaveCount(3);
+  });
+});
+
+test.describe('feedback modes and points', () => {
+  test('by default, answers are only shown at the end, with every question corrected', async ({ page }) => {
+    await loadExample(page, 'The TCP three-way handshake');
+    await expect(page.getByRole('radio', { name: 'At the end of the quiz' })).toBeChecked();
+    await setCount(page, 2);
+    await page.getByRole('button', { name: 'Start' }).click();
+
+    await expect(page.locator('.running-score')).toHaveCount(0);
+    await answer(page, true);
+    await expect(page.getByRole('button', { name: 'Check' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Next question' }).click();
+    await expect(page.getByText('Question 2 of 2')).toBeVisible();
+    await expect(page.locator('.feedback')).toHaveCount(0);
+    await answer(page, false);
+    await page.keyboard.press('Enter'); // Enter records the answer and moves on
+
+    await expect(page.locator('.score-text')).toHaveText('1 points out of 4'); // +2 − 1
+    await expect(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
+    await expect(page.locator('.mistake')).toHaveCount(2);
+    await expect(page.locator('.mistake.outcome-correct .points')).toHaveText('+2');
+    await expect(page.locator('.mistake.outcome-wrong .points')).toHaveText('−1');
+  });
+
+  test('showing the answer before answering is worth 0 points, in both modes', async ({ page }) => {
+    await loadExample(page, 'The TCP three-way handshake');
+    await setCount(page, 2);
+    await page.getByRole('button', { name: 'Start' }).click(); // "end" mode
+
+    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
+    await expect(page.locator('.feedback.revealed .verdict')).toContainText('Answer revealed. 0 pts');
+    await expect(page.locator('.feedback .sources')).toBeVisible();
+    await expect(page.locator('.answer.missed').first()).toBeVisible();
+    await expect(page.locator('.answer').first()).toBeDisabled();
+    await page.getByRole('button', { name: 'Next question' }).click();
+    await answer(page, true);
+    await page.getByRole('button', { name: 'See results' }).click();
+
+    await expect(page.locator('.score-text')).toHaveText('2 points out of 4');
+    await expect(page.locator('.outcomes .outcome-revealed')).toContainText('Answers revealed1');
+  });
+
+  test('immediate mode shows the points and the running score', async ({ page }) => {
+    await startWith(page, 'JavaScript closures');
+    await answer(page, true);
+    await page.getByRole('button', { name: 'Check' }).click();
+    await expect(page.locator('.feedback .verdict')).toContainText('Correct! +2 pts');
+    await page.getByRole('button', { name: 'Next question' }).click();
+    await expect(page.locator('.running-score')).toHaveText('Score: 2 pts');
+
+    await answer(page, false);
+    await page.getByRole('button', { name: 'Check' }).click();
+    await expect(page.locator('.feedback .verdict')).toContainText('Not quite. −1 pts');
+    await page.getByRole('button', { name: 'Next question' }).click();
+    await expect(page.locator('.running-score')).toHaveText('Score: 1 pts');
+
+    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
+    await page.getByRole('button', { name: 'Next question' }).click();
+    await expect(page.locator('.running-score')).toHaveText('Score: 1 pts');
+
+    await page.getByRole('button', { name: 'End session' }).click();
+    await expect(page.locator('.score-ring')).toHaveText('1');
+    await expect(page.locator('.score-text')).toHaveText('1 points out of 8');
+    await expect(page.getByRole('heading', { name: 'Questions to review' })).toBeVisible();
+    await expect(page.locator('.mistake')).toHaveCount(3); // wrong, revealed, unanswered
   });
 });

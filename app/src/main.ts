@@ -3,15 +3,18 @@ import { LEVELS, QUESTION_TYPES, type Issue, type Level, type Question, type Que
 import { h, rich } from './dom';
 import { getLanguage, languageName, setLanguage, t, UI_LANGUAGES, type MessageKey } from './i18n';
 import { Library, type MediaResolver } from './library';
-import { fetchExamples, loadFiles, loadUrl, loadUrls, type ExampleEntry, type LoadSummary } from './loader';
+import { loadFiles, loadUrl, loadUrls, type LoadSummary } from './loader';
 import { renderBlock, renderInline } from './markdown';
 import {
   candidates,
   expectedAnswers,
   isCorrect,
   newSession,
+  outcome,
+  POINTS,
   retrySession,
   score,
+  type Outcome,
   type Config,
   type Item,
   type Session,
@@ -24,7 +27,6 @@ const state = {
   library: new Library(),
   config: undefined as Config | undefined,
   session: undefined as Session | undefined,
-  examples: [] as ExampleEntry[],
   loading: false,
   failures: [] as string[],
 };
@@ -167,30 +169,6 @@ function homeView(): HTMLElement[] {
     h('button', { type: 'submit', class: 'button' }, t('load.urlButton')),
   );
 
-  const lang = getLanguage();
-  const examples = state.examples.length
-    ? h(
-        'section',
-        { class: 'card' },
-        h('h2', {}, t('load.examples')),
-        h(
-          'div',
-          { class: 'examples' },
-          state.examples.map((ex) =>
-            h(
-              'button',
-              {
-                class: 'button example',
-                onclick: () => void runLoad(() => loadUrls(state.library, ex.files)),
-              },
-              ex.titles[lang] ?? ex.titles[lang.split('-')[0]] ?? Object.values(ex.titles)[0],
-              h('span', { class: 'muted' }, ` · ${Object.keys(ex.titles).map((l) => l.toUpperCase()).join(' / ')}`),
-            ),
-          ),
-        ),
-      )
-    : null;
-
   return [
     h('p', { class: 'tagline' }, t('app.tagline')),
     h(
@@ -204,7 +182,6 @@ function homeView(): HTMLElement[] {
       state.failures.length ? h('ul', { class: 'failures' }, state.failures.map((f) => h('li', {}, f))) : null,
       issuesView(state.library.issues),
     ),
-    examples ?? h('span'),
   ].filter(Boolean) as HTMLElement[];
 }
 
@@ -222,7 +199,7 @@ function allTags(quizIds: string[]): string[] {
 function syncConfig(): void {
   const ids = [...state.library.bundles.keys()];
   if (!state.config) {
-    state.config = { quizIds: ids, levels: [...LEVELS], types: [...QUESTION_TYPES], tags: [], count: 10 };
+    state.config = { quizIds: ids, levels: [...LEVELS], types: [...QUESTION_TYPES], tags: [], count: 10, feedback: 'end' };
     return;
   }
   const known = new Set(state.config.quizIds);
@@ -360,6 +337,30 @@ function configView(): HTMLElement[] {
       chips(t('config.types'), QUESTION_TYPES, () => config.types, (ty) => t(`type.${ty}` as MessageKey), (v) => (config.types = v as QuestionType[])),
       tags.length ? chips(t('config.tags'), tags, () => config.tags, (tag) => tag, (v) => (config.tags = v), t('config.tagsHint')) : null,
       h('fieldset', {}, h('legend', {}, t('config.count')), h('div', { class: 'count' }, countRange, countInput)),
+      h(
+        'fieldset',
+        {},
+        h('legend', {}, t('config.feedback')),
+        h(
+          'div',
+          { class: 'chips', role: 'radiogroup' },
+          (['end', 'immediate'] as const).map((mode) =>
+            h(
+              'label',
+              { class: 'chip' },
+              h('input', {
+                type: 'radio',
+                name: 'feedback',
+                value: mode,
+                checked: config.feedback === mode,
+                onchange: () => (config.feedback = mode),
+              }),
+              h('span', {}, t(`feedback.${mode}` as MessageKey)),
+            ),
+          ),
+        ),
+        h('p', { class: 'muted small' }, t('config.scoring')),
+      ),
       availableEl,
       startBtn,
     ),
@@ -416,13 +417,32 @@ function select(index: number): void {
   render();
 }
 
-function validate(): void {
+/** Records the answer. In "end" mode the correction stays hidden and the session moves on. */
+function submit(): void {
   const item = currentItem();
   const resolved = resolveItem(item);
   if (!resolved || item.result || !item.selected.length) return;
   item.result = isCorrect(resolved.question, item.selected) ? 'correct' : 'wrong';
+  if (state.session!.config.feedback === 'end') {
+    next();
+    return;
+  }
   render();
   document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** Shows the answer and the explanation before answering: the question is worth 0 points. */
+function reveal(): void {
+  const item = currentItem();
+  if (item.result) return;
+  item.result = 'revealed';
+  render();
+  document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/** Whether the correction of the current question is on screen. */
+function correctionShown(item: Item): boolean {
+  return item.result === 'revealed' || (item.result !== undefined && state.session!.config.feedback === 'immediate');
 }
 
 function next(): void {
@@ -437,6 +457,29 @@ function resolveItem(item: Item) {
   return state.library.question(item.quizId, item.questionId, getLanguage());
 }
 
+function signed(points: number): string {
+  return points > 0 ? `+${points}` : points < 0 ? `−${-points}` : '0';
+}
+
+function outcomeView(item: Item): HTMLElement {
+  const o = outcome(item);
+  const label = { correct: t('q.correct'), wrong: t('q.wrong'), revealed: t('q.revealed'), unanswered: t('outcome.unanswered') }[o];
+  return h(
+    'p',
+    { class: 'verdict' },
+    label,
+    ' ',
+    h('span', { class: 'points' }, t('q.points', { p: signed(POINTS[o]) })),
+  );
+}
+
+function correctionView(question: Question, resolve: MediaResolver): HTMLElement[] {
+  return [
+    question.explanation ? h('div', { class: 'explanation' }, h('h3', {}, t('q.explanation')), rich('div', renderBlock(question.explanation, resolve))) : null,
+    sourcesView(question.sources, resolve),
+  ].filter(Boolean) as HTMLElement[];
+}
+
 function questionView(): HTMLElement[] {
   const session = state.session!;
   const item = currentItem();
@@ -447,25 +490,26 @@ function questionView(): HTMLElement[] {
   }
   const { question, translation, lang } = resolved;
   const resolve = translation.resolve;
-  const answered = item.result !== undefined;
+  const shown = correctionShown(item);
   const expected = expectedAnswers(question);
   const multi = question.type === 'mcq' && expected.length > 1;
   const quizCount = new Set(session.items.map((i) => i.quizId)).size;
   const ui = getLanguage();
+  const immediate = session.config.feedback === 'immediate';
 
   const answers = answerLabels(question, resolve, item.order).map(({ index, html }, k) => {
     const selected = item.selected.includes(index);
     const classes = ['answer'];
     if (selected) classes.push('selected');
-    if (answered && expected.includes(index)) classes.push(selected ? 'correct' : 'missed');
-    if (answered && selected && !expected.includes(index)) classes.push('wrong');
+    if (shown && expected.includes(index)) classes.push(selected && item.result !== 'revealed' ? 'correct' : 'missed');
+    if (shown && selected && item.result !== 'revealed' && !expected.includes(index)) classes.push('wrong');
     return h(
       'button',
       {
         class: classes.join(' '),
         role: multi ? 'checkbox' : 'radio',
         'aria-checked': String(selected),
-        disabled: answered,
+        disabled: item.result !== undefined,
         onclick: () => select(index),
       },
       h('span', { class: 'key', 'aria-hidden': 'true' }, String(k + 1)),
@@ -473,8 +517,9 @@ function questionView(): HTMLElement[] {
     );
   });
 
-  const progress = ((session.index + (answered ? 1 : 0)) / session.items.length) * 100;
+  const progress = ((session.index + (item.result ? 1 : 0)) / session.items.length) * 100;
   const isLast = session.index === session.items.length - 1;
+  const nextLabel = t(isLast ? 'q.finish' : 'q.next');
 
   return [
     h(
@@ -485,6 +530,7 @@ function questionView(): HTMLElement[] {
         'div',
         { class: 'row spread' },
         h('span', { class: 'muted' }, t('q.progress', { i: session.index + 1, n: session.items.length })),
+        immediate ? h('span', { class: 'running-score' }, t('q.score', { p: score(state.library, session).points })) : null,
         h('button', { class: 'button ghost small', onclick: () => go('results') }, t('q.quit')),
       ),
     ),
@@ -505,21 +551,16 @@ function questionView(): HTMLElement[] {
       question.body ? rich('div', renderBlock(question.body, resolve), { class: 'question-body', lang }) : null,
       h('p', { class: 'hint muted small' }, t(question.type === 'true-false' ? 'q.tf' : multi ? 'q.multi' : 'q.single')),
       h('div', { class: `answers ${question.type === 'true-false' ? 'tf' : ''}`, role: multi ? 'group' : 'radiogroup', lang }, answers),
-      answered
-        ? h(
-            'div',
-            { class: `feedback ${item.result}`, lang },
-            h('p', { class: 'verdict' }, t(item.result === 'correct' ? 'q.correct' : 'q.wrong')),
-            question.explanation ? h('div', { class: 'explanation' }, h('h3', {}, t('q.explanation')), rich('div', renderBlock(question.explanation, resolve))) : null,
-            sourcesView(question.sources, resolve),
-          )
-        : null,
+      shown ? h('div', { class: `feedback ${item.result}`, lang }, outcomeView(item), correctionView(question, resolve)) : null,
       h(
         'div',
         { class: 'row actions' },
-        answered
-          ? h('button', { class: 'button primary', onclick: next, autofocus: true }, t(isLast ? 'q.finish' : 'q.next'))
-          : h('button', { class: 'button primary', onclick: validate, disabled: item.selected.length === 0 }, t('q.validate')),
+        shown
+          ? h('button', { class: 'button primary', onclick: next, autofocus: true }, nextLabel)
+          : [
+              h('button', { class: 'button primary', onclick: submit, disabled: item.selected.length === 0 }, immediate ? t('q.validate') : nextLabel),
+              h('button', { class: 'button ghost reveal', onclick: reveal }, t('q.reveal')),
+            ],
         h('span', { class: 'muted small keys' }, t('q.keys')),
       ),
     ),
@@ -528,14 +569,14 @@ function questionView(): HTMLElement[] {
 
 document.addEventListener('keydown', (e) => {
   if (state.screen !== 'question' || e.ctrlKey || e.metaKey || e.altKey) return;
-  if ((e.target as HTMLElement).closest('input, select, textarea')) return;
+  if ((e.target as HTMLElement).closest('input, select, textarea, button.reveal')) return;
   const item = currentItem();
   const resolved = resolveItem(item);
   if (!resolved) return;
   if (e.key === 'Enter') {
     e.preventDefault();
-    if (item.result) next();
-    else validate();
+    if (correctionShown(item)) next();
+    else submit();
     return;
   }
   const n = Number(e.key);
@@ -557,19 +598,32 @@ function answerText(question: Question, indices: number[], resolve: MediaResolve
 function resultsView(): HTMLElement[] {
   const session = state.session!;
   const s = score(state.library, session);
-  const pct = s.total ? Math.round((s.correct / s.total) * 100) : 0;
-  const mistakes = session.items.filter((i) => i.result !== 'correct');
+  const pct = s.maxPoints ? Math.round((Math.max(0, s.points) / s.maxPoints) * 100) : 0;
+  const toRetry = session.items.filter((i) => outcome(i) !== 'correct');
+  // In "end" mode the user has not seen any correction yet: list every question.
+  const reviewed = session.config.feedback === 'end' ? session.items : toRetry;
+  const outcomes: Outcome[] = ['correct', 'wrong', 'revealed', 'unanswered'];
 
   return [
     h('h1', {}, t('results.title')),
     h(
       'section',
       { class: 'card score' },
-      h('div', { class: 'score-ring', style: `--pct:${pct}` }, h('span', {}, `${pct}%`)),
+      h('div', { class: 'score-ring', style: `--pct:${pct}` }, h('span', {}, String(s.points))),
       h(
         'div',
         {},
-        h('p', { class: 'score-text' }, t('results.score', { c: s.correct, n: s.total })),
+        h('p', { class: 'score-text' }, t('results.points', { p: s.points, max: s.maxPoints })),
+        h(
+          'ul',
+          { class: 'outcomes' },
+          outcomes
+            .filter((o) => s.counts[o] > 0 || o === 'correct' || o === 'wrong')
+            .map((o) =>
+              h('li', { class: `outcome-${o}` }, h('span', {}, t(`outcome.${o}` as MessageKey)), h('strong', {}, String(s.counts[o])), h('span', { class: 'muted' }, t('q.points', { p: signed(s.counts[o] * POINTS[o]) }))),
+            ),
+        ),
+        h('p', { class: 'muted small' }, t('config.scoring')),
         h('h3', {}, t('results.byLevel')),
         h(
           'ul',
@@ -580,8 +634,8 @@ function resultsView(): HTMLElement[] {
               'li',
               {},
               h('span', { class: `badge level level-${l}` }, `${l} · ${t(`level.${l}` as MessageKey)}`),
-              h('span', { class: 'bar' }, h('span', { style: `width:${(e.correct / e.total) * 100}%` })),
-              h('span', {}, `${e.correct} / ${e.total}`),
+              h('span', { class: 'bar' }, h('span', { style: `width:${(Math.max(0, e.points) / e.maxPoints) * 100}%` })),
+              h('span', {}, `${e.points} / ${e.maxPoints}`),
             );
           }),
         ),
@@ -590,13 +644,13 @@ function resultsView(): HTMLElement[] {
     h(
       'div',
       { class: 'row actions' },
-      mistakes.length
+      toRetry.length
         ? h(
             'button',
             {
               class: 'button primary',
               onclick: () => {
-                state.session = retrySession(state.library, session.config, mistakes);
+                state.session = retrySession(state.library, session.config, toRetry);
                 go('question');
               },
             },
@@ -616,30 +670,31 @@ function resultsView(): HTMLElement[] {
       ),
       h('button', { class: 'button ghost', onclick: () => go('config') }, t('results.settings')),
     ),
-    mistakes.length
+    reviewed.length
       ? h(
           'section',
           { class: 'card' },
-          h('h2', {}, t('results.mistakes')),
-          mistakes.map((item) => {
+          h('h2', {}, t(session.config.feedback === 'end' ? 'results.correction' : 'results.mistakes')),
+          reviewed.map((item) => {
             const r = resolveItem(item);
             if (!r) return null;
             const { question, translation } = r;
             return h(
               'details',
-              { class: 'mistake', lang: r.lang },
-              h('summary', { html: renderInline(question.title, translation.resolve) }),
+              { class: `mistake outcome-${outcome(item)}`, lang: r.lang },
+              h('summary', {}, h('span', { class: 'summary-title', html: renderInline(question.title, translation.resolve) }), h('span', { class: 'points' }, signed(POINTS[outcome(item)]))),
               question.body ? rich('div', renderBlock(question.body, translation.resolve), { class: 'question-body' }) : null,
               h(
                 'dl',
                 {},
                 h('dt', {}, t('results.yourAnswer')),
-                rich('dd', answerText(question, item.selected, translation.resolve), { class: 'wrong' }),
+                rich('dd', item.result === 'revealed' ? `<em>${t('q.revealed')}</em>` : answerText(question, item.selected, translation.resolve), {
+                  class: outcome(item) === 'correct' ? 'correct' : 'wrong',
+                }),
                 h('dt', {}, t('results.expected')),
                 rich('dd', answerText(question, expectedAnswers(question), translation.resolve), { class: 'correct' }),
               ),
-              question.explanation ? h('div', { class: 'explanation' }, h('h3', {}, t('q.explanation')), rich('div', renderBlock(question.explanation, translation.resolve))) : null,
-              sourcesView(question.sources, translation.resolve),
+              correctionView(question, translation.resolve),
             );
           }),
         )
@@ -655,8 +710,6 @@ async function init(): Promise<void> {
   const urls = new URLSearchParams(location.search).getAll('quiz');
   render();
   if (urls.length) await runLoad(() => loadUrls(state.library, urls));
-  state.examples = await fetchExamples();
-  if (state.screen === 'home') render();
 }
 
 void init();

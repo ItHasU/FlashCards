@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { loadExample } from './helpers';
+import { loadExample, setFeedback } from './helpers';
 
 test.describe('languages', () => {
   test.describe('with a French browser', () => {
@@ -9,7 +9,6 @@ test.describe('languages', () => {
       await page.goto('./');
       await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
       await expect(page.locator('.dropzone')).toContainText('Déposez ici vos fichiers');
-      await expect(page.locator('.example', { hasText: 'La poignée de main TCP en trois temps' })).toBeVisible();
     });
 
     test('a quiz without French falls back to its language, with a notice', async ({ page }) => {
@@ -25,6 +24,7 @@ test.describe('languages', () => {
     await page.goto('./');
     await loadExample(page, 'The TCP three-way handshake');
     await page.locator('.chip', { hasText: 'standards' }).click();
+    await setFeedback(page, 'immediate');
     await page.getByRole('button', { name: 'Start' }).click();
 
     await expect(page.locator('.question-title')).toHaveText('Which RFC is the current specification of TCP?');

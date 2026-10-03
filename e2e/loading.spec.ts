@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { exampleZip, loadExample, md } from './helpers';
+import { exampleFiles, exampleZip, loadExample, md } from './helpers';
 
 test.describe('loading quizzes', () => {
-  test('home page lists the bundled examples', async ({ page }) => {
+  test('home page offers loading, without an examples menu', async ({ page }) => {
     await page.goto('./');
-    await expect(page.locator('.example')).toHaveCount(4);
+    await expect(page.locator('.example')).toHaveCount(0);
     await expect(page.locator('.dropzone')).toContainText('Drop .md or .zip quiz files here');
     await expect(page.getByText('Files stay in your browser')).toBeVisible();
   });
@@ -23,7 +23,7 @@ test.describe('loading quizzes', () => {
     await page.goto('./');
     await loadExample(page, 'The TCP three-way handshake');
     await page.getByRole('button', { name: 'Add quizzes' }).click();
-    await loadExample(page, 'JavaScript closures');
+    await page.locator('input[type=file]').setInputFiles(exampleFiles('JavaScript closures'));
     await expect(page.locator('.quiz-choice')).toHaveCount(2);
     await expect(page.locator('.available')).toHaveText('10 matching questions');
     await page.locator('.quiz-choice input').first().uncheck();
@@ -42,8 +42,7 @@ test.describe('loading quizzes', () => {
     await expect(page.locator('.quiz-choice')).toContainText('6 questions');
     await page.locator('.chip', { hasText: 'handshake' }).click();
     await page.getByRole('button', { name: 'Start' }).click();
-    await page.locator('.answer').first().click();
-    await page.getByRole('button', { name: 'Check' }).click();
+    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
     const img = page.locator('.source-image img').first();
     await expect(img).toHaveAttribute('src', /^blob:/);
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
@@ -89,7 +88,7 @@ language: en
     await loadExample(page, 'JavaScript closures');
     await page.getByRole('button', { name: 'Unload all' }).click();
     await expect(page.locator('.screen-home')).toBeVisible();
-    await loadExample(page, 'The TCP three-way handshake');
+    await page.locator('input[type=file]').setInputFiles(exampleFiles('The TCP three-way handshake'));
     await expect(page.locator('.quiz-choice')).toHaveCount(1);
   });
 });
