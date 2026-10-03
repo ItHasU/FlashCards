@@ -4,7 +4,7 @@ import { exampleZip, loadExample, md } from './helpers';
 test.describe('loading quizzes', () => {
   test('home page lists the bundled examples', async ({ page }) => {
     await page.goto('./');
-    await expect(page.locator('.example')).toHaveCount(3);
+    await expect(page.locator('.example')).toHaveCount(4);
     await expect(page.locator('.dropzone')).toContainText('Drop .md or .zip quiz files here');
     await expect(page.getByText('Files stay in your browser')).toBeVisible();
   });

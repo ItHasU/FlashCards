@@ -59,15 +59,40 @@ export function quizAdvice(stats: QuizStats): string[] {
 // ---------------------------------------------------------------------------
 // Verbatim check of excerpts against source material
 
-/** Normalizes text so that formatting, typography and whitespace do not affect matching. */
-export function normalizeForMatch(text: string): string {
+// Inline HTML that may appear in Markdown sources. Limited to known tags so that TypeScript generics (Promise<T>) survive.
+const INLINE_TAG_RE = /<\/?(a|abbr|b|bdi|br|cite|code|dfn|em|i|kbd|mark|q|s|samp|small|span|strong|sub|sup|u|var|wbr)\b[^>]*>/gi;
+// MDN KumaScript macros such as {{JSxRef("Promise/then", "then()")}}: keep the displayed text (last argument).
+const MACRO_RE = /\{\{\s*\w+\(\s*((?:"[^"]*"|'[^']*'|[^)])*?)\s*\)\s*\}\}/g;
+
+function macroText(args: string): string {
+  const strings = [...args.matchAll(/"([^"]*)"|'([^']*)'/g)].map((m) => m[1] ?? m[2]);
+  return strings.length ? strings[strings.length - 1] : '';
+}
+
+function decodeEntities(text: string): string {
   return text
+    .replace(/&nbsp;|&#160;|&#x[aA]0;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;|&rsquo;|&lsquo;/g, "'")
+    .replace(/&laquo;|&raquo;|&ldquo;|&rdquo;/g, '"')
+    .replace(/&mdash;|&ndash;/g, '-')
+    .replace(/&hellip;/g, '…')
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&amp;/g, '&');
+}
+
+/** Normalizes text so that formatting, typography, inline HTML and whitespace do not affect matching. */
+export function normalizeForMatch(text: string): string {
+  return decodeEntities(text.replace(MACRO_RE, (_, args: string) => macroText(args)).replace(INLINE_TAG_RE, ''))
     .normalize('NFKC')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // markdown links/images: keep the text
     .replace(/[‘’ʼ′]/g, "'")
     .replace(/[“”«»„]/g, '"')
     .replace(/[‐-―]/g, '-')
-    .replace(/[*_`#>|\\]/g, ' ')
+    .replace(/[*_`]/g, '') // emphasis and code markers: **word**, => word,
+    .replace(/[#>|\\]/g, ' ') // headings, blockquotes, table pipes
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();

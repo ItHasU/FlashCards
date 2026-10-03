@@ -50,6 +50,14 @@ describe('excerpt verification', () => {
     expect(normalizeForMatch('It’s  **“bold”**\n— and `code` [link](http://x)')).toBe('it\'s "bold" - and code link');
   });
 
+  it('ignores inline HTML, entities and MDN macros, but keeps TypeScript generics', () => {
+    expect(normalizeForMatch('<i lang="en">pending</i>&nbsp;: état initial, voir {{JSxRef("Promise/then", "then()")}}')).toBe(
+      'pending : état initial, voir then()',
+    );
+    expect(normalizeForMatch('- **Déjà complétée**, si un `iterable` _vide_.')).toBe('- déjà complétée, si un iterable vide.');
+    expect(normalizeForMatch('{{DOMxRef("AbortController")}} &amp; Promise<T>')).toBe('abortcontroller & promise<t') // '>' is dropped like blockquote markers, on both sides;
+  });
+
   it('extracts the quoted fragments', () => {
     expect(excerptFragments('"First part […] second part."\n— Book, p. 3')).toEqual(['first part', 'second part.']);
     expect(excerptFragments('« Une citation »\n— Livre')).toEqual(['une citation']);
