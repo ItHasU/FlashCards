@@ -18,6 +18,34 @@ Deux briques, reliées par un **format de fichier commun** :
 Le format est le contrat entre les deux. On le fige en premier : la skill et
 l'application peuvent ensuite avancer chacune de leur côté.
 
+
+## Décisions (validées le 2026-10-03)
+
+| Sujet | Décision |
+|-------|----------|
+| Niveaux | 3 : Découverte, Compréhension, Maîtrise |
+| Stack de l'app | Vite + TypeScript, **sans framework** |
+| Types de questions | QCM (une ou plusieurs bonnes réponses) et **vrai/faux**. Pas de réponse libre : trop difficile à interpréter et à corriger |
+| Langues | Multilingue : interface **et** contenu des quiz. L'utilisateur peut changer de langue à tout moment, même au milieu d'une question. Un fichier par langue, regroupés par l'`id` du quiz |
+| Hébergement | Release GitHub avec un zip de l'app statique, et workflow GitHub Pages (à activer une fois dans les réglages du dépôt) |
+| Plusieurs quiz | Possibilité de charger et mélanger plusieurs quiz dans une même session |
+
+Le format final est spécifié dans [`format.md`](format.md). Il remplace
+l'ébauche du §1 ci-dessous, en particulier pour le vrai/faux (`type: true-false
+| answer: true|false`) et les traductions (§5 de la spec).
+
+## Avancement
+
+| # | Étape | État |
+|---|-------|------|
+| 0 | Format : spec, parseur, validateur, exemples, tests | ✅ fait |
+| 1 | App MVP : chargement md/zip/URL, réglages, session, résultats, i18n, multi-quiz | ✅ fait |
+| 2 | Skill MVP : `SKILL.md`, guides de rédaction et de sourçage, scripts | ✅ première version, à éprouver sur de vrais documents |
+| 3 | Médias : zip, sources image et code | ✅ fait (app, validateur et `package.mjs`) |
+| 4 | Sites et dépôts | 🟡 couvert par les instructions de la skill, à tester |
+| 5 | Finitions : Pages, `?quiz=URL`, revoir mes erreurs | ✅ fait, sauf le mode hors-ligne (PWA) |
+| 6 | Bonus : historique, répétition espacée, export Anki | ⏳ plus tard |
+
 ---
 
 ## 1. Le format de quiz (le contrat)
@@ -258,12 +286,4 @@ FlashCards/
 
 ## 6. Questions ouvertes
 
-1. **Niveaux** : 3 niveaux comme proposé, ou une échelle de 1 à 5 ?
-2. **Stack de l'app** : Vite + TS sans framework, ou plutôt un framework
-   (Preact, Svelte, Vue) ?
-3. **Types de questions** : seulement des QCM (une ou plusieurs bonnes
-   réponses) au départ, ou aussi vrai/faux et réponse libre dès le MVP ?
-4. **Langue** : interface en français uniquement, ou bilingue FR/EN ?
-5. **Hébergement** : GitHub Pages sur ce dépôt ?
-6. **Fusion** : faut-il pouvoir charger plusieurs quiz à la fois et les
-   mélanger ?
+Toutes tranchées : voir « Décisions » en tête de document.
