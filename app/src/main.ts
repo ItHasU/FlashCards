@@ -385,11 +385,11 @@ function sourceMarkdown(s: Source): string {
   return [...lines.slice(0, at).map((l) => `> ${l}`), '', ...lines.slice(at)].join('\n');
 }
 
-function sourcesView(sources: Source[], resolve: MediaResolver): HTMLElement {
+function sourcesView(sources: Source[], resolve: MediaResolver, title = t('q.sources')): HTMLElement {
   return h(
     'div',
     { class: 'sources' },
-    h('h3', {}, t('q.sources')),
+    h('h3', {}, title),
     sources.map((s) =>
       h('div', { class: `source source-${s.type}` }, h('span', { class: 'badge' }, t(`source.${s.type}` as MessageKey)), rich('div', renderBlock(sourceMarkdown(s), resolve))),
     ),
@@ -431,18 +431,18 @@ function submit(): void {
   document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/** Shows the answer and the explanation before answering: the question is worth 0 points. */
-function reveal(): void {
+/** Shows the sources of the question as a hint. The user still has to answer, for fewer points. */
+function showHint(): void {
   const item = currentItem();
-  if (item.result) return;
-  item.result = 'revealed';
+  if (item.result || item.hinted) return;
+  item.hinted = true;
   render();
-  document.querySelector('.feedback')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  document.querySelector('.hint-box')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /** Whether the correction of the current question is on screen. */
 function correctionShown(item: Item): boolean {
-  return item.result === 'revealed' || (item.result !== undefined && state.session!.config.feedback === 'immediate');
+  return item.result !== undefined && state.session!.config.feedback === 'immediate';
 }
 
 function next(): void {
@@ -463,11 +463,12 @@ function signed(points: number): string {
 
 function outcomeView(item: Item): HTMLElement {
   const o = outcome(item);
-  const label = { correct: t('q.correct'), wrong: t('q.wrong'), revealed: t('q.revealed'), unanswered: t('outcome.unanswered') }[o];
+  const label = o === 'unanswered' ? t('outcome.unanswered') : t(item.result === 'correct' ? 'q.correct' : 'q.wrong');
   return h(
     'p',
     { class: 'verdict' },
     label,
+    item.hinted ? ` ${t('q.withHint')}` : '',
     ' ',
     h('span', { class: 'points' }, t('q.points', { p: signed(POINTS[o]) })),
   );
@@ -501,8 +502,8 @@ function questionView(): HTMLElement[] {
     const selected = item.selected.includes(index);
     const classes = ['answer'];
     if (selected) classes.push('selected');
-    if (shown && expected.includes(index)) classes.push(selected && item.result !== 'revealed' ? 'correct' : 'missed');
-    if (shown && selected && item.result !== 'revealed' && !expected.includes(index)) classes.push('wrong');
+    if (shown && expected.includes(index)) classes.push(selected ? 'correct' : 'missed');
+    if (shown && selected && !expected.includes(index)) classes.push('wrong');
     return h(
       'button',
       {
@@ -551,6 +552,9 @@ function questionView(): HTMLElement[] {
       question.body ? rich('div', renderBlock(question.body, resolve), { class: 'question-body', lang }) : null,
       h('p', { class: 'hint muted small' }, t(question.type === 'true-false' ? 'q.tf' : multi ? 'q.multi' : 'q.single')),
       h('div', { class: `answers ${question.type === 'true-false' ? 'tf' : ''}`, role: multi ? 'group' : 'radiogroup', lang }, answers),
+      item.hinted && !shown
+        ? h('div', { class: 'hint-box', lang }, h('p', { class: 'hint-used small' }, t('q.hintUsed')), sourcesView(question.sources, resolve, t('q.hintTitle')))
+        : null,
       shown ? h('div', { class: `feedback ${item.result}`, lang }, outcomeView(item), correctionView(question, resolve)) : null,
       h(
         'div',
@@ -559,7 +563,7 @@ function questionView(): HTMLElement[] {
           ? h('button', { class: 'button primary', onclick: next, autofocus: true }, nextLabel)
           : [
               h('button', { class: 'button primary', onclick: submit, disabled: item.selected.length === 0 }, immediate ? t('q.validate') : nextLabel),
-              h('button', { class: 'button ghost reveal', onclick: reveal }, t('q.reveal')),
+              item.hinted ? null : h('button', { class: 'button ghost hint-button', onclick: showHint }, t('q.hint')),
             ],
         h('span', { class: 'muted small keys' }, t('q.keys')),
       ),
@@ -569,7 +573,7 @@ function questionView(): HTMLElement[] {
 
 document.addEventListener('keydown', (e) => {
   if (state.screen !== 'question' || e.ctrlKey || e.metaKey || e.altKey) return;
-  if ((e.target as HTMLElement).closest('input, select, textarea, button.reveal')) return;
+  if ((e.target as HTMLElement).closest('input, select, textarea, button.hint-button')) return;
   const item = currentItem();
   const resolved = resolveItem(item);
   if (!resolved) return;
@@ -602,7 +606,7 @@ function resultsView(): HTMLElement[] {
   const toRetry = session.items.filter((i) => outcome(i) !== 'correct');
   // In "end" mode the user has not seen any correction yet: list every question.
   const reviewed = session.config.feedback === 'end' ? session.items : toRetry;
-  const outcomes: Outcome[] = ['correct', 'wrong', 'revealed', 'unanswered'];
+  const outcomes: Outcome[] = ['correct', 'correctWithHint', 'wrong', 'wrongWithHint', 'unanswered'];
 
   return [
     h('h1', {}, t('results.title')),
@@ -688,8 +692,8 @@ function resultsView(): HTMLElement[] {
                 'dl',
                 {},
                 h('dt', {}, t('results.yourAnswer')),
-                rich('dd', item.result === 'revealed' ? `<em>${t('q.revealed')}</em>` : answerText(question, item.selected, translation.resolve), {
-                  class: outcome(item) === 'correct' ? 'correct' : 'wrong',
+                rich('dd', answerText(question, item.selected, translation.resolve) + (item.hinted ? ` <em class="muted">${t('q.withHint')}</em>` : ''), {
+                  class: item.result === 'correct' ? 'correct' : 'wrong',
                 }),
                 h('dt', {}, t('results.expected')),
                 rich('dd', answerText(question, expectedAnswers(question), translation.resolve), { class: 'correct' }),

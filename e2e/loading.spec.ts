@@ -42,7 +42,7 @@ test.describe('loading quizzes', () => {
     await expect(page.locator('.quiz-choice')).toContainText('6 questions');
     await page.locator('.chip', { hasText: 'handshake' }).click();
     await page.getByRole('button', { name: 'Start' }).click();
-    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
+    await page.getByRole('button', { name: 'Hint: show the source' }).click();
     const img = page.locator('.source-image img').first();
     await expect(img).toHaveAttribute('src', /^blob:/);
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);

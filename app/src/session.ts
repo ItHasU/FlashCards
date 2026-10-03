@@ -15,12 +15,12 @@ export interface Config {
 }
 
 /**
- * Outcome of a question. "revealed": the user asked to see the answer and explanation
- * before answering; "unanswered": the session ended before the question was answered.
+ * Outcome of a question. The hint shows the sources of the question (not the answer) before
+ * answering, and changes the points; "unanswered": the session ended before the question was answered.
  */
-export type Outcome = 'correct' | 'wrong' | 'revealed' | 'unanswered';
+export type Outcome = 'correct' | 'correctWithHint' | 'wrong' | 'wrongWithHint' | 'unanswered';
 
-export const POINTS: Record<Outcome, number> = { correct: 2, wrong: -1, revealed: 0, unanswered: 0 };
+export const POINTS: Record<Outcome, number> = { correct: 2, correctWithHint: 1, wrong: 0, wrongWithHint: -1, unanswered: 0 };
 
 export interface Item {
   quizId: string;
@@ -29,7 +29,9 @@ export interface Item {
   order: number[];
   /** Selected answers, as authoring-order indices. For true/false: [1] = true, [0] = false. */
   selected: number[];
-  result?: Exclude<Outcome, 'unanswered'>;
+  result?: 'correct' | 'wrong';
+  /** The user looked at the hint (the sources) before answering. */
+  hinted?: boolean;
 }
 
 export interface Session {
@@ -104,7 +106,8 @@ export function expectedAnswers(question: Question): number[] {
 }
 
 export function outcome(item: Item): Outcome {
-  return item.result ?? 'unanswered';
+  if (!item.result) return 'unanswered';
+  return item.hinted ? (item.result === 'correct' ? 'correctWithHint' : 'wrongWithHint') : item.result;
 }
 
 export interface LevelScore {
@@ -124,7 +127,7 @@ export interface Score {
 
 export function score(library: Library, session: Session): Score {
   const byLevel = new Map<Level, LevelScore>();
-  const counts: Record<Outcome, number> = { correct: 0, wrong: 0, revealed: 0, unanswered: 0 };
+  const counts: Record<Outcome, number> = { correct: 0, correctWithHint: 0, wrong: 0, wrongWithHint: 0, unanswered: 0 };
   let points = 0;
   for (const item of session.items) {
     const o = outcome(item);

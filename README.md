@@ -37,9 +37,15 @@ Avant de commencer, on choisit quand afficher les réponses :
 - **après chaque question** : la correction, l'explication et les sources
   s'affichent dès qu'on valide.
 
-Barème : **+2** pour une bonne réponse, **−1** pour une erreur, **0** si l'on
-clique sur « Voir la réponse » avant de répondre (ou si la question reste sans
-réponse).
+Si l'on bloque, le bouton « Indice : voir la source » affiche la source de la
+question (sans la réponse ni l'explication), puis on répond. Barème :
+
+| | Sans indice | Avec indice |
+|---|---|---|
+| Bonne réponse | **+2** | **+1** |
+| Mauvaise réponse | **0** | **−1** |
+
+Une question laissée sans réponse (session terminée en avance) vaut 0.
 
 ## Exemples
 

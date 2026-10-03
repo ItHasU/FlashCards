@@ -59,19 +59,20 @@ describe('session', () => {
     expect([...mcq.order].sort()).toEqual([0, 1, 2]);
   });
 
-  it('scores points: +2 correct, -1 wrong, 0 revealed or unanswered', () => {
-    expect(POINTS).toEqual({ correct: 2, wrong: -1, revealed: 0, unanswered: 0 });
+  it('scores points: +2 / +1 with hint when correct, 0 / -1 with hint when wrong, 0 unanswered', () => {
+    expect(POINTS).toEqual({ correct: 2, correctWithHint: 1, wrong: 0, wrongWithHint: -1, unanswered: 0 });
     const lib = new Library();
     lib.add(quiz('en', '- [x] a\n- [ ] b'), noMedia);
     const session = newSession(lib, { quizIds: ['demo'], levels: [1, 2, 3], types: ['mcq', 'true-false'], tags: [], count: 10, feedback: 'end' });
     const [first, second] = session.items;
     first.result = 'correct';
     second.result = 'wrong';
-    expect(score(lib, session)).toMatchObject({ points: 1, maxPoints: 4, counts: { correct: 1, wrong: 1, revealed: 0, unanswered: 0 } });
-    second.result = 'revealed';
-    expect(score(lib, session).points).toBe(2);
+    expect(score(lib, session)).toMatchObject({ points: 2, maxPoints: 4, counts: { correct: 1, wrong: 1 } });
+    first.hinted = true;
+    second.hinted = true;
+    expect(score(lib, session)).toMatchObject({ points: 0, counts: { correctWithHint: 1, wrongWithHint: 1, correct: 0, wrong: 0 } });
     second.result = undefined;
-    expect(score(lib, session)).toMatchObject({ points: 2, counts: { unanswered: 1 } });
+    expect(score(lib, session)).toMatchObject({ points: 1, counts: { unanswered: 1 } });
     const levels = score(lib, session).byLevel;
     expect([...levels.values()].reduce((n, l) => n + l.maxPoints, 0)).toBe(4);
   });

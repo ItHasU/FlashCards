@@ -69,7 +69,7 @@ test.describe('playing', () => {
       }
       await page.getByRole('button', { name: i < 4 ? 'Next question' : 'See results' }).click();
     }
-    await expect(page.locator('.score-text')).toHaveText('2 points out of 8'); // 2 × (+2) + 2 × (−1)
+    await expect(page.locator('.score-text')).toHaveText('4 points out of 8'); // 2 × (+2) + 2 × 0
     await expect(page.locator('.mistake')).toHaveCount(2);
     await page.locator('.mistake summary').first().click();
     await expect(page.locator('.mistake dd.correct').first()).toBeVisible();
@@ -159,7 +159,7 @@ test.describe('playing', () => {
   });
 });
 
-test.describe('feedback modes and points', () => {
+test.describe('feedback modes, hints and points', () => {
   test('by default, answers are only shown at the end, with every question corrected', async ({ page }) => {
     await loadExample(page, 'The TCP three-way handshake');
     await expect(page.getByRole('radio', { name: 'At the end of the quiz' })).toBeChecked();
@@ -175,29 +175,36 @@ test.describe('feedback modes and points', () => {
     await answer(page, false);
     await page.keyboard.press('Enter'); // Enter records the answer and moves on
 
-    await expect(page.locator('.score-text')).toHaveText('1 points out of 4'); // +2 − 1
+    await expect(page.locator('.score-text')).toHaveText('2 points out of 4'); // +2 + 0
     await expect(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
     await expect(page.locator('.mistake')).toHaveCount(2);
     await expect(page.locator('.mistake.outcome-correct .points')).toHaveText('+2');
-    await expect(page.locator('.mistake.outcome-wrong .points')).toHaveText('−1');
+    await expect(page.locator('.mistake.outcome-wrong .points')).toHaveText('0');
   });
 
-  test('showing the answer before answering is worth 0 points, in both modes', async ({ page }) => {
+  test('the hint only shows the sources; answering with it is worth +1 or −1', async ({ page }) => {
     await loadExample(page, 'The TCP three-way handshake');
     await setCount(page, 2);
     await page.getByRole('button', { name: 'Start' }).click(); // "end" mode
 
-    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
-    await expect(page.locator('.feedback.revealed .verdict')).toContainText('Answer revealed. 0 pts');
-    await expect(page.locator('.feedback .sources')).toBeVisible();
-    await expect(page.locator('.answer.missed').first()).toBeVisible();
-    await expect(page.locator('.answer').first()).toBeDisabled();
-    await page.getByRole('button', { name: 'Next question' }).click();
+    await page.getByRole('button', { name: 'Hint: show the source' }).click();
+    await expect(page.locator('.hint-box .sources .source').first()).toBeVisible();
+    await expect(page.locator('.hint-box')).toContainText('With the hint, a correct answer is worth +1 and a wrong one −1.');
+    await expect(page.locator('.feedback, .explanation, .answer.missed, .answer.correct')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Hint: show the source' })).toHaveCount(0);
+    await expect(page.locator('.answer').first()).toBeEnabled();
     await answer(page, true);
+    await page.getByRole('button', { name: 'Next question' }).click();
+
+    await expect(page.locator('.hint-box')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Hint: show the source' }).click();
+    await answer(page, false);
     await page.getByRole('button', { name: 'See results' }).click();
 
-    await expect(page.locator('.score-text')).toHaveText('2 points out of 4');
-    await expect(page.locator('.outcomes .outcome-revealed')).toContainText('Answers revealed1');
+    await expect(page.locator('.score-text')).toHaveText('0 points out of 4'); // +1 − 1
+    await expect(page.locator('.outcomes .outcome-correctWithHint')).toContainText('Correct with hint1+1 pts');
+    await expect(page.locator('.outcomes .outcome-wrongWithHint')).toContainText('Wrong with hint1−1 pts');
+    await expect(page.locator('.mistake dd.correct em, .mistake dd.wrong em').first()).toHaveText('(with hint)');
   });
 
   test('immediate mode shows the points and the running score', async ({ page }) => {
@@ -210,18 +217,22 @@ test.describe('feedback modes and points', () => {
 
     await answer(page, false);
     await page.getByRole('button', { name: 'Check' }).click();
-    await expect(page.locator('.feedback .verdict')).toContainText('Not quite. −1 pts');
+    await expect(page.locator('.feedback .verdict')).toContainText('Not quite. 0 pts');
     await page.getByRole('button', { name: 'Next question' }).click();
-    await expect(page.locator('.running-score')).toHaveText('Score: 1 pts');
+    await expect(page.locator('.running-score')).toHaveText('Score: 2 pts');
 
-    await page.getByRole('button', { name: 'Show the answer (0 points)' }).click();
+    await page.getByRole('button', { name: 'Hint: show the source' }).click();
+    await answer(page, true);
+    await page.getByRole('button', { name: 'Check' }).click();
+    await expect(page.locator('.feedback .verdict')).toContainText('Correct! (with hint) +1 pts');
+    await expect(page.locator('.feedback .explanation, .feedback .sources').first()).toBeVisible();
     await page.getByRole('button', { name: 'Next question' }).click();
-    await expect(page.locator('.running-score')).toHaveText('Score: 1 pts');
+    await expect(page.locator('.running-score')).toHaveText('Score: 3 pts');
 
     await page.getByRole('button', { name: 'End session' }).click();
-    await expect(page.locator('.score-ring')).toHaveText('1');
-    await expect(page.locator('.score-text')).toHaveText('1 points out of 8');
+    await expect(page.locator('.score-ring')).toHaveText('3');
+    await expect(page.locator('.score-text')).toHaveText('3 points out of 8');
     await expect(page.getByRole('heading', { name: 'Questions to review' })).toBeVisible();
-    await expect(page.locator('.mistake')).toHaveCount(3); // wrong, revealed, unanswered
+    await expect(page.locator('.mistake')).toHaveCount(3); // wrong, correct with hint, unanswered
   });
 });

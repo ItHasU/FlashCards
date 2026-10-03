@@ -245,18 +245,19 @@ legend { font-weight: 700; margin-bottom: 0.5rem; }
 
 .running-score { font-weight: 700; color: var(--primary); }
 .verdict .points { font-size: 0.95rem; font-weight: 700; opacity: 0.85; margin-left: 0.3rem; }
-.feedback.revealed { background: var(--primary-soft); border-color: var(--primary); }
-.feedback.revealed .verdict { color: var(--primary); }
+.hint-box { margin-top: 1.2rem; padding: 1rem; border-radius: 10px; border-left: 4px solid var(--primary); background: var(--primary-soft); }
+.hint-box .sources h3 { margin-top: 0.4rem; }
+.hint-used { margin: 0; color: var(--primary); font-weight: 600; }
 .outcomes { list-style: none; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.25rem; }
 .outcomes li { display: grid; grid-template-columns: 1fr 2.5rem 4.5rem; gap: 0.5rem; align-items: baseline; }
 .outcomes strong { text-align: right; }
 .outcomes .muted { text-align: right; }
-.outcome-correct > span:first-child { color: var(--ok); }
-.outcome-wrong > span:first-child { color: var(--ko); }
+.outcome-correct > span:first-child, .outcome-correctWithHint > span:first-child { color: var(--ok); }
+.outcome-wrong > span:first-child, .outcome-wrongWithHint > span:first-child { color: var(--ko); }
 .mistake summary { display: flex; gap: 0.8rem; align-items: baseline; }
 .mistake summary .summary-title { flex: 1; }
 .mistake summary .points { font-weight: 700; white-space: nowrap; }
-.mistake.outcome-correct summary .points { color: var(--ok); }
-.mistake.outcome-wrong summary .points { color: var(--ko); }
-.mistake.outcome-revealed summary .points, .mistake.outcome-unanswered summary .points { color: var(--muted); }
+.mistake.outcome-correct summary .points, .mistake.outcome-correctWithHint summary .points { color: var(--ok); }
+.mistake.outcome-wrong summary .points, .mistake.outcome-wrongWithHint summary .points { color: var(--ko); }
+.mistake.outcome-unanswered summary .points { color: var(--muted); }
 .mistake dd.correct:first-of-type { color: var(--ok); }
